@@ -89,7 +89,7 @@ export default function PlacementPhase({
           disabled={!allPlaced || loading}
         >
           {loading ? (
-            <ActivityIndicator color="#5a6a6e" />
+            <ActivityIndicator color={UI_BUTTON} />
           ) : (
             <Text style={styles.buttonText}>Start game</Text>
           )}
@@ -98,6 +98,9 @@ export default function PlacementPhase({
     </>
   );
 }
+
+const UI_BUTTON = "rgba(67, 67, 67, 1)";
+const UI_BUTTON_ACTIVE_BG = "rgba(67, 67, 67, 0.15)";
 
 const styles = StyleSheet.create({
   title: {
@@ -132,23 +135,23 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   planeBtnActive: {
-    borderColor: "#7a8a8e",
-    backgroundColor: "#e8ebec",
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
   },
   planeLabel: { fontSize: 14, fontWeight: "600", color: "#333" },
-  planeLabelActive: { color: "#5a6a6e" },
+  planeLabelActive: { color: UI_BUTTON },
   planeCheck: { fontSize: 14, color: "#2e7d32", fontWeight: "700" },
   secondaryButton: {
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: "#999",
+    borderColor: UI_BUTTON,
     marginRight: 8,
   },
   secondaryButtonText: { fontSize: 14, fontWeight: "600", color: "#333" },
   button: {
-    backgroundColor: "#7a8a8e",
+    backgroundColor: UI_BUTTON,
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 8,

@@ -112,9 +112,7 @@ export default function MapCarousel({
     c + 90,
     c + 140,
   ];
-  const scaleOutputRange = [
-    0.78, 0.82, 0.88, 0.94, 1, 0.94, 0.88, 0.82, 0.78,
-  ];
+  const scaleOutputRange = [0.78, 0.82, 0.88, 0.94, 1, 0.94, 0.88, 0.82, 0.78];
 
   return (
     <View style={styles.wrap}>
@@ -134,10 +132,7 @@ export default function MapCarousel({
         ]}
       >
         <Animated.View
-          style={[
-            styles.track,
-            { transform: [{ translateX: carouselSlide }] },
-          ]}
+          style={[styles.track, { transform: [{ translateX: carouselSlide }] }]}
         >
           {showMaps.map((m, i) => {
             const itemPos = Animated.add(carouselSlide, itemCenterX[i]);
@@ -213,7 +208,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: "#e0e0e0",
+    borderColor: "rgba(67, 67, 67, 1)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -221,13 +216,13 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   arrowBtnPressed: {
-    backgroundColor: "#e8ebec",
-    borderColor: "#7a8a8e",
+    backgroundColor: "rgba(67, 67, 67, 0.15)",
+    borderColor: "rgba(67, 67, 67, 1)",
     transform: [{ scale: 0.96 }],
   },
   arrowText: {
     fontSize: 28,
-    color: "#7a8a8e",
+    color: "rgba(67, 67, 67, 1)",
     fontWeight: "600",
     includeFontPadding: false,
   },

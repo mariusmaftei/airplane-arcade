@@ -7,6 +7,7 @@ import {
   Dimensions,
 } from "react-native";
 import ExplosionEffect from "./ExplosionEffect";
+import SmokeEffect from "./SmokeEffect";
 
 const AIM_IMAGE = require("../../assets/iamges/effects/aim.png");
 
@@ -53,6 +54,7 @@ export default function Grid({
   defaultMap = false,
   highlightCell = null,
   explodingCell = null,
+  smokeCell = null,
 }) {
   const cellSize = getCellSize(gridSize);
   const labelWidth = 20;
@@ -113,6 +115,11 @@ export default function Grid({
         state === "hit" &&
         explodingCell.row === r &&
         explodingCell.col === c;
+      const isSmoke =
+        smokeCell &&
+        state === "miss" &&
+        smokeCell.row === r &&
+        smokeCell.col === c;
       cells.push(
         <Pressable
           key={`${r}-${c}`}
@@ -130,6 +137,8 @@ export default function Grid({
         >
           {isExploding ? (
             <ExplosionEffect size={cellSize} />
+          ) : isSmoke ? (
+            <SmokeEffect size={cellSize} />
           ) : isHighlighted ? (
             <Image
               source={AIM_IMAGE}

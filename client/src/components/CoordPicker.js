@@ -10,7 +10,7 @@ import {
 import { colToLetter } from "../utils/format";
 
 const STEP_PX = 16;
-const PAD_SIZE = 160;
+const PAD_SIZE = 112;
 
 const SHOOT_BTN_UNPRESSED = require("../../assets/iamges/button-unpressed.png");
 const SHOOT_BTN_PRESSED = require("../../assets/iamges/button-pressed.png");
@@ -123,7 +123,6 @@ export default function CoordPicker({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.padLabel}>Swipe pad: ←→ letter, ↑↓ number</Text>
       <View style={styles.row} collapsable={false}>
         <View
           style={[styles.swipePad, disabled && styles.swipePadDisabled]}
@@ -131,12 +130,10 @@ export default function CoordPicker({
           pointerEvents="box-only"
           {...panResponder.panHandlers}
         >
-          <Text style={styles.swipeHint}>← letter →</Text>
           <View style={styles.coordDisplay}>
             <Text style={styles.coordLetter}>{colToLetter(selectedCol)}</Text>
             <Text style={styles.coordNumber}>{selectedRow + 1}</Text>
           </View>
-          <Text style={styles.swipeHint}>↑ number ↓</Text>
         </View>
         <Pressable
           style={({ pressed }) => [
@@ -163,14 +160,8 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
     width: "100%",
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  padLabel: {
-    fontSize: 12,
-    color: "#666",
-    marginBottom: 8,
-    fontWeight: "600",
+    marginTop: 8,
+    marginBottom: 4,
   },
   row: {
     flexDirection: "row",
@@ -196,12 +187,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#dce4e8",
   },
   swipePadDisabled: { opacity: 0.6 },
-  swipeHint: {
-    fontSize: 9,
-    color: "#788894",
-    fontWeight: "600",
-    marginBottom: 2,
-  },
   coordDisplay: {
     flexDirection: "row",
     alignItems: "baseline",

@@ -34,22 +34,36 @@ async function request(path, options = {}) {
   return data;
 }
 
-export async function createGame(difficulty = "medium", planes = null) {
-  return request("/game", {
-    method: "POST",
-    body: planes ? { difficulty, planes } : { difficulty },
-  });
+export async function createGame(
+  difficulty = "medium",
+  planes = null,
+  options = {},
+) {
+  const body =
+    planes?.length > 0
+      ? { difficulty, planes }
+      : options.vsCpu
+        ? { difficulty, vsCpu: true }
+        : { difficulty };
+  return request("/game", { method: "POST", body });
 }
 
 export async function shoot(gameId, row, col) {
   return request(`/game/${gameId}/shoot`, {
     method: "POST",
-    body: { row, col },
+    body: { row: Number(row), col: Number(col) },
   });
 }
 
 export async function giveUp(gameId) {
   return request(`/game/${encodeURIComponent(gameId)}/give-up`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export async function cpuShoot(gameId) {
+  return request(`/game/${encodeURIComponent(gameId)}/cpu-shoot`, {
     method: "POST",
     body: {},
   });

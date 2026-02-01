@@ -185,4 +185,15 @@ function getPlaneCells(game) {
   return cells;
 }
 
-export { DIFFICULTIES, createGame, shoot, getPlaneCells };
+function pickRandomUnshotCell(game) {
+  const candidates = [];
+  for (let r = 0; r < game.gridSize; r++) {
+    for (let c = 0; c < game.gridSize; c++) {
+      if (!game.shotCells.has(`${r},${c}`)) candidates.push({ row: r, col: c });
+    }
+  }
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
+
+export { DIFFICULTIES, createGame, shoot, getPlaneCells, pickRandomUnshotCell };

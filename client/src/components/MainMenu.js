@@ -4,6 +4,7 @@ import {
   Text,
   Pressable,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { DIFFICULTIES, MAP_OPTIONS, MATH_PAPER_BG } from "../constants";
 import MapCarousel from "./MapCarousel";
@@ -19,8 +20,12 @@ const GAME_MODES = [
 
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 10;
+const UI_BUTTON = "rgba(67, 67, 67, 1)";
+const UI_BUTTON_ACTIVE_BG = "rgba(67, 67, 67, 0.15)";
 
 export default function MainMenu({
+  playerName = "Player1",
+  onPlayerNameChange,
   gameMode = "computer",
   onGameModeChange,
   numPlayers = 2,
@@ -39,6 +44,17 @@ export default function MainMenu({
   return (
     <View style={styles.content}>
       <Text style={styles.title}>Airplane Arcade</Text>
+      <View style={styles.section}>
+        <Text style={styles.subtitle}>Your name</Text>
+        <TextInput
+          style={styles.nameInput}
+          value={playerName}
+          onChangeText={onPlayerNameChange}
+          placeholder="Player1"
+          placeholderTextColor="#999"
+          maxLength={20}
+        />
+      </View>
       <View style={styles.section}>
         <Text style={styles.subtitle}>Game mode</Text>
         <View style={styles.modeRow}>
@@ -199,7 +215,7 @@ export default function MainMenu({
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#5a6a6e" />
+          <ActivityIndicator color={UI_BUTTON} />
         ) : (
           <Text style={styles.buttonText}>
             {customPlacement ? "Place planes" : "New Game"}
@@ -227,6 +243,17 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
+  nameInput: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: "#ddd",
+    backgroundColor: "#fafafa",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
+  },
   modeRow: { flexDirection: "row", gap: 8 },
   modeButton: {
     flex: 1,
@@ -238,9 +265,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  modeButtonActive: { borderColor: "#7a8a8e", backgroundColor: "#e8ebec" },
+  modeButtonActive: {
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
+  },
   modeLabel: { fontSize: 15, fontWeight: "600", color: "#333" },
-  modeLabelActive: { color: "#5a6a6e" },
+  modeLabelActive: { color: UI_BUTTON },
   playersRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -256,9 +286,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  playerButtonActive: { borderColor: "#7a8a8e", backgroundColor: "#e8ebec" },
+  playerButtonActive: {
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
+  },
   playerLabel: { fontSize: 15, fontWeight: "600", color: "#333" },
-  playerLabelActive: { color: "#5a6a6e" },
+  playerLabelActive: { color: UI_BUTTON },
   playersHint: {
     fontSize: 13,
     color: "#888",
@@ -279,16 +312,22 @@ const styles = StyleSheet.create({
   diffButtonEasy: { borderWidth: 2 },
   diffButtonMedium: { borderWidth: 2.5 },
   diffButtonHard: { borderWidth: 3 },
-  diffButtonActive: { borderColor: "#7a8a8e", backgroundColor: "#e8ebec" },
-  diffButtonEasyActive: { borderColor: "#5c6bc0", backgroundColor: "#e8eaf6" },
+  diffButtonActive: {
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
+  },
+  diffButtonEasyActive: {
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
+  },
   diffButtonMediumActive: {
-    borderColor: "#7a8a8e",
-    backgroundColor: "#e8ebec",
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
     borderWidth: 2.5,
   },
   diffButtonHardActive: {
-    borderColor: "#c62828",
-    backgroundColor: "#ffebee",
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
     borderWidth: 3,
   },
   diffGridPreview: {
@@ -301,9 +340,9 @@ const styles = StyleSheet.create({
     backgroundColor: MATH_PAPER_BG,
   },
   diffLabel: { fontSize: 15, fontWeight: "600", color: "#333" },
-  diffLabelActive: { color: "#5a6a6e" },
+  diffLabelActive: { color: UI_BUTTON },
   diffDesc: { fontSize: 11, color: "#666", marginTop: 2 },
-  diffDescActive: { color: "#5a6a6e" },
+  diffDescActive: { color: UI_BUTTON },
   diffSize: { fontSize: 9, color: "#999", marginTop: 2 },
   mapName: { fontSize: 14, fontWeight: "600", color: "#333", marginTop: 6 },
   customPlacementRow: {
@@ -318,14 +357,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#fafafa",
   },
   customPlacementRowActive: {
-    borderColor: "#7a8a8e",
-    backgroundColor: "#e8ebec",
+    borderColor: UI_BUTTON,
+    backgroundColor: UI_BUTTON_ACTIVE_BG,
   },
   customPlacementLabel: { fontSize: 15, fontWeight: "600", color: "#333" },
-  customPlacementLabelActive: { color: "#5a6a6e" },
+  customPlacementLabelActive: { color: UI_BUTTON },
   customPlacementHint: { fontSize: 13, color: "#888", fontWeight: "500" },
   primaryButton: {
-    backgroundColor: "#7a8a8e",
+    backgroundColor: UI_BUTTON,
     paddingVertical: 16,
     paddingHorizontal: 24,
     borderRadius: 12,

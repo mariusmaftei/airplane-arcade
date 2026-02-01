@@ -13,12 +13,19 @@ import MathPaperBackground from "../components/MathPaperBackground";
 import IntroScreen from "./IntroScreen";
 import MainMenu from "../components/MainMenu";
 import PlacementPhase from "../components/PlacementPhase";
+import VersusScreen from "../components/VersusScreen";
 import GamePhase from "../components/GamePhase";
-import { createGame, shoot, giveUp as giveUpApi } from "../api";
+import {
+  createGame,
+  shoot,
+  giveUp as giveUpApi,
+  cpuShoot as cpuShootApi,
+} from "../api";
 import { PLANE_SHAPE, getShapeCells } from "../utils/planeShape";
 import { DIFFICULTIES, MAP_OPTIONS } from "../constants";
 
 const HIT_SOUND = require("../../assets/sounds/Big Explosion Sound Effect - Lightning Editor.mp3");
+const MISS_SOUND = require("../../assets/sounds/Sound Effect - Missile Launch.mp3");
 
 export default function GameScreen() {
   const [showIntro, setShowIntro] = useState(true);
@@ -36,6 +43,7 @@ export default function GameScreen() {
   const [gaveUp, setGaveUp] = useState(false);
   const [revealedCells, setRevealedCells] = useState([]);
   const [mapId, setMapId] = useState("default");
+  const [playerName, setPlayerName] = useState("Player1");
   const [gameMode, setGameMode] = useState("computer");
   const [numPlayers, setNumPlayers] = useState(2);
   const [customPlacement, setCustomPlacement] = useState(false);
@@ -48,10 +56,24 @@ export default function GameScreen() {
   const [selectedRow, setSelectedRow] = useState(0);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [explodingCell, setExplodingCell] = useState(null);
+  const [smokeCell, setSmokeCell] = useState(null);
+  const [isMatch, setIsMatch] = useState(false);
+  const [isPlayerTurn, setIsPlayerTurn] = useState(true);
+  const [turnSwitchDelay, setTurnSwitchDelay] = useState(false);
+  const [playerBoardHits, setPlayerBoardHits] = useState([]);
+  const [playerBoardMisses, setPlayerBoardMisses] = useState([]);
+  const [playerWon, setPlayerWon] = useState(null);
+  const [showVersusScreen, setShowVersusScreen] = useState(false);
+  const [versusLeftName, setVersusLeftName] = useState("");
+  const [versusRightName, setVersusRightName] = useState("");
 
   const timerRef = useRef(null);
+  const versusTimeoutRef = useRef(null);
   const explosionTimeoutRef = useRef(null);
+  const smokeTimeoutRef = useRef(null);
+  const turnSwitchTimeoutRef = useRef(null);
   const hitPlayer = useAudioPlayer(HIT_SOUND);
+  const missPlayer = useAudioPlayer(MISS_SOUND);
 
   const difficultyConfig =
     DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
@@ -87,6 +109,14 @@ export default function GameScreen() {
     return () => clearInterval(t);
   }, [cooldownRemaining]);
 
+  useEffect(() => {
+    return () => {
+      if (versusTimeoutRef.current) clearTimeout(versusTimeoutRef.current);
+      if (turnSwitchTimeoutRef.current)
+        clearTimeout(turnSwitchTimeoutRef.current);
+    };
+  }, []);
+
   const startNewGame = useCallback(async () => {
     setLoading(true);
     setLastResult(null);
@@ -97,18 +127,26 @@ export default function GameScreen() {
     setGaveUp(false);
     setRevealedCells([]);
     setExplodingCell(null);
+    setSmokeCell(null);
+    setTurnSwitchDelay(false);
+    setIsPlayerTurn(true);
+    setPlayerBoardHits([]);
+    setPlayerBoardMisses([]);
+    setPlayerWon(null);
     try {
-      const res = await createGame(difficulty);
+      const vsCpu = gameMode === "computer";
+      const res = await createGame(difficulty, null, { vsCpu });
       setGameId(res.gameId);
       setGridSize(res.gridSize ?? difficultyConfig.gridSize);
       setHits(res.hits ?? []);
       setMisses(res.misses ?? []);
+      setIsMatch(res.isMatch ?? false);
     } catch (e) {
       Alert.alert("Error", e.message || "Could not start game");
     } finally {
       setLoading(false);
     }
-  }, [difficulty, difficultyConfig.gridSize]);
+  }, [difficulty, difficultyConfig.gridSize, gameMode]);
 
   const startPlacementPhase = useCallback(() => {
     setPlacedPlanes(Array(difficultyConfig.numPlanes).fill(null));
@@ -170,6 +208,13 @@ export default function GameScreen() {
     setGaveUp(false);
     setRevealedCells([]);
     setExplodingCell(null);
+    setSmokeCell(null);
+    setTurnSwitchDelay(false);
+    setIsMatch(true);
+    setIsPlayerTurn(true);
+    setPlayerBoardHits([]);
+    setPlayerBoardMisses([]);
+    setPlayerWon(null);
     try {
       const res = await createGame(difficulty, planes);
       setGameId(res.gameId);
@@ -199,6 +244,14 @@ export default function GameScreen() {
     setGaveUp(false);
     setRevealedCells([]);
     setExplodingCell(null);
+    setSmokeCell(null);
+    setTurnSwitchDelay(false);
+    setIsMatch(false);
+    setIsPlayerTurn(true);
+    setPlayerBoardHits([]);
+    setPlayerBoardMisses([]);
+    setPlayerWon(null);
+    setShowVersusScreen(false);
   }, []);
 
   const handleGiveUp = useCallback(() => {
@@ -236,6 +289,8 @@ export default function GameScreen() {
   const handleCellPress = useCallback(
     async (row, col) => {
       if (!gameId || gameOver || loading || cooldownRemaining > 0) return;
+      if (turnSwitchDelay) return;
+      if (isMatch && !isPlayerTurn) return;
       setLoading(true);
       setLastResult(null);
       setSunkPlaneId(null);
@@ -245,8 +300,30 @@ export default function GameScreen() {
         setMisses(res.misses ?? misses);
         setLastResult(res.result);
         if (res.sunkPlaneId != null) setSunkPlaneId(res.sunkPlaneId);
+        if (res.isPlayerTurn !== undefined) {
+          if (res.result === "miss") {
+            setTurnSwitchDelay(true);
+            setVersusLeftName("CPU");
+            setVersusRightName((playerName || "Player1").trim() || "Player1");
+            if (versusTimeoutRef.current)
+              clearTimeout(versusTimeoutRef.current);
+            if (turnSwitchTimeoutRef.current)
+              clearTimeout(turnSwitchTimeoutRef.current);
+            versusTimeoutRef.current = setTimeout(() => {
+              setShowVersusScreen(true);
+              turnSwitchTimeoutRef.current = setTimeout(() => {
+                setIsPlayerTurn(res.isPlayerTurn);
+                setTurnSwitchDelay(false);
+                setShowVersusScreen(false);
+              }, 2000);
+            }, 2000);
+          } else {
+            setIsPlayerTurn(res.isPlayerTurn);
+          }
+        }
         if (res.gameOver) {
           setGameOver(true);
+          setPlayerWon(true);
           Vibration.vibrate(300);
         } else if (res.result === "sunk") Vibration.vibrate(100);
         else if (res.result === "hit") Vibration.vibrate(50);
@@ -260,6 +337,12 @@ export default function GameScreen() {
             () => setExplodingCell(null),
             500,
           );
+        } else if (res.result === "miss") {
+          missPlayer.seekTo(0);
+          missPlayer.play();
+          setSmokeCell({ row, col });
+          if (smokeTimeoutRef.current) clearTimeout(smokeTimeoutRef.current);
+          smokeTimeoutRef.current = setTimeout(() => setSmokeCell(null), 800);
         }
         if (res.cooldownRemaining != null)
           setCooldownRemaining(res.cooldownRemaining);
@@ -269,6 +352,9 @@ export default function GameScreen() {
             e.data?.cooldownRemaining ??
             Math.ceil((e.data?.retryAfterMs ?? 1000) / 1000);
           setCooldownRemaining(sec);
+        } else if (e.status === 400 && e.data?.error === "Not your turn") {
+          setIsPlayerTurn(false);
+          setTurnSwitchDelay(false);
         } else {
           Alert.alert("Error", e.message || "Shot failed");
         }
@@ -276,8 +362,95 @@ export default function GameScreen() {
         setLoading(false);
       }
     },
-    [gameId, gameOver, loading, cooldownRemaining, hits, misses, hitPlayer],
+    [
+      gameId,
+      gameOver,
+      loading,
+      cooldownRemaining,
+      turnSwitchDelay,
+      hits,
+      misses,
+      hitPlayer,
+      missPlayer,
+      isMatch,
+      isPlayerTurn,
+      playerName,
+    ],
   );
+
+  useEffect(() => {
+    if (
+      !gameId ||
+      !isMatch ||
+      isPlayerTurn ||
+      gameOver ||
+      gaveUp ||
+      loading ||
+      turnSwitchDelay
+    )
+      return;
+    const t = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await cpuShootApi(gameId);
+        setPlayerBoardHits(res.playerHits ?? []);
+        setPlayerBoardMisses(res.playerMisses ?? []);
+        if (res.gameOver) {
+          setGameOver(true);
+          setPlayerWon(false);
+          setIsPlayerTurn(res.isPlayerTurn ?? true);
+        } else if (res.result === "miss") {
+          setTurnSwitchDelay(true);
+          setVersusLeftName((playerName || "Player1").trim() || "Player1");
+          setVersusRightName("CPU");
+          if (versusTimeoutRef.current) clearTimeout(versusTimeoutRef.current);
+          if (turnSwitchTimeoutRef.current)
+            clearTimeout(turnSwitchTimeoutRef.current);
+          versusTimeoutRef.current = setTimeout(() => {
+            setShowVersusScreen(true);
+            turnSwitchTimeoutRef.current = setTimeout(() => {
+              setIsPlayerTurn(res.isPlayerTurn ?? true);
+              setTurnSwitchDelay(false);
+              setShowVersusScreen(false);
+            }, 2000);
+          }, 2000);
+        } else {
+          setIsPlayerTurn(res.isPlayerTurn ?? true);
+        }
+        if (res.result === "hit" || res.result === "sunk") {
+          hitPlayer.seekTo(0);
+          hitPlayer.play();
+          if (res.cell)
+            setExplodingCell({ row: res.cell.row, col: res.cell.col });
+          setTimeout(() => setExplodingCell(null), 500);
+        } else if (res.result === "miss" && res.cell) {
+          missPlayer.seekTo(0);
+          missPlayer.play();
+          setSmokeCell({ row: res.cell.row, col: res.cell.col });
+          setTimeout(() => setSmokeCell(null), 800);
+        }
+      } catch (e) {
+        setIsPlayerTurn(true);
+        setTurnSwitchDelay(false);
+        if (e.status !== 400 || e.data?.error !== "Not CPU turn") {
+          Alert.alert("Error", e.message || "CPU shot failed");
+        }
+      } finally {
+        setLoading(false);
+      }
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [
+    gameId,
+    isMatch,
+    isPlayerTurn,
+    gameOver,
+    gaveUp,
+    loading,
+    turnSwitchDelay,
+    hitPlayer,
+    missPlayer,
+  ]);
 
   const placementPreviewCells =
     previewAt &&
@@ -307,12 +480,20 @@ export default function GameScreen() {
     misses.some((m) => m.row === effRow && m.col === effCol) ||
     revealedCells?.some((c) => c.row === effRow && c.col === effCol);
   const highlightCell = !coordCellShot ? { row: effRow, col: effCol } : null;
+  const gridHits = isMatch && !isPlayerTurn ? playerBoardHits : hits;
+  const gridMisses = isMatch && !isPlayerTurn ? playerBoardMisses : misses;
+  const gridRevealed = isMatch && !isPlayerTurn ? revealedCells : [];
+  const effectiveIsPlayerTurn = isMatch
+    ? isPlayerTurn
+    : !loading && cooldownRemaining === 0 && !gameOver && !gaveUp;
   const canShootCoord =
     !!highlightCell &&
     !loading &&
     !gameOver &&
     !gaveUp &&
-    cooldownRemaining === 0;
+    !turnSwitchDelay &&
+    cooldownRemaining === 0 &&
+    (!isMatch || isPlayerTurn);
 
   const mapOption = MAP_OPTIONS.find((m) => m.id === mapId);
   const Wrapper = mapId === "default" ? View : ImageBackground;
@@ -339,18 +520,17 @@ export default function GameScreen() {
           gridSize={placementPhase ? placementGridSize : gridSize}
         />
       )}
-      <ScrollView
-        scrollEnabled={scrollEnabled}
-        contentContainerStyle={[
-          styles.scroll,
-          {
-            paddingTop: 20 + insets.top,
-            paddingBottom: 40 + insets.bottom,
-          },
-        ]}
-        keyboardShouldPersistTaps="handled"
-      >
-        {placementPhase ? (
+      {placementPhase ? (
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingTop: 20 + insets.top,
+              paddingBottom: 40 + insets.bottom,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
           <PlacementPhase
             selectedPlaneIndex={selectedPlaneIndex}
             onSelectPlane={setSelectedPlaneIndex}
@@ -369,8 +549,21 @@ export default function GameScreen() {
             onStartGame={startGameFromPlacement}
             loading={loading}
           />
-        ) : !gameId ? (
+        </ScrollView>
+      ) : !gameId ? (
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingTop: 20 + insets.top,
+              paddingBottom: 40 + insets.bottom,
+            },
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
           <MainMenu
+            playerName={playerName}
+            onPlayerNameChange={setPlayerName}
             gameMode={gameMode}
             onGameModeChange={setGameMode}
             numPlayers={numPlayers}
@@ -385,42 +578,87 @@ export default function GameScreen() {
             onNewGame={startNewGame}
             onPlacePlanes={startPlacementPhase}
           />
-        ) : (
+        </ScrollView>
+      ) : showVersusScreen ? (
+        <View style={styles.gameView}>
+          {mapId === "default" && <MathPaperBackground gridSize={gridSize} />}
+          <VersusScreen
+            leftName={versusLeftName}
+            rightName={versusRightName}
+            mapImage={mapOption?.image}
+          />
+        </View>
+      ) : (
+        <View style={styles.gameView}>
           <GamePhase
-            elapsed={elapsed}
-            shots={shots}
-            hits={hits}
-            accuracy={accuracy}
+            gameMode={gameMode}
+            numPlayers={numPlayers}
+            playerName={playerName}
+            isPlayerTurn={effectiveIsPlayerTurn}
             gaveUp={gaveUp}
             gameOver={gameOver}
+            playerWon={playerWon}
+            elapsed={elapsed}
+            shots={shots}
+            hits={gridHits}
+            accuracy={accuracy}
             lastResult={lastResult}
             sunkPlaneId={sunkPlaneId}
             cooldownRemaining={cooldownRemaining}
             onGiveUp={handleGiveUp}
             onMainMenu={goToMainMenu}
             gridSize={gridSize}
-            misses={misses}
-            revealedCells={revealedCells}
+            misses={gridMisses}
+            revealedCells={gridRevealed}
+            carouselHits={
+              isMatch ? (isPlayerTurn ? playerBoardHits : hits) : undefined
+            }
+            carouselMisses={
+              isMatch ? (isPlayerTurn ? playerBoardMisses : misses) : undefined
+            }
+            carouselRevealed={
+              isMatch ? (isPlayerTurn ? revealedCells : []) : undefined
+            }
+            carouselLabel={
+              isMatch
+                ? isPlayerTurn
+                  ? (playerName || "Player1").trim() || "Player1"
+                  : "CPU"
+                : undefined
+            }
+            attackShots={isMatch ? hits.length + misses.length : undefined}
+            attackHits={isMatch ? hits.length : undefined}
             onCellPress={handleCellPress}
             gridDisabled={
-              loading || gameOver || gaveUp || cooldownRemaining > 0
+              loading ||
+              gameOver ||
+              gaveUp ||
+              turnSwitchDelay ||
+              cooldownRemaining > 0 ||
+              (isMatch && !isPlayerTurn)
             }
             mapBackground={mapId !== "default"}
             defaultMap={mapId === "default"}
-            highlightCell={highlightCell}
+            highlightCell={isMatch && !isPlayerTurn ? null : highlightCell}
             explodingCell={explodingCell}
+            smokeCell={smokeCell}
             selectedCol={effCol}
             selectedRow={effRow}
             onColChange={setSelectedCol}
             onRowChange={setSelectedRow}
             onShoot={handleCoordShoot}
             canShootCoord={canShootCoord}
-            coordDisabled={loading || cooldownRemaining > 0}
+            coordDisabled={
+              loading ||
+              turnSwitchDelay ||
+              cooldownRemaining > 0 ||
+              (isMatch && !isPlayerTurn)
+            }
             onPadTouchStart={() => setScrollEnabled(false)}
             onPadTouchEnd={() => setScrollEnabled(true)}
           />
-        )}
-      </ScrollView>
+        </View>
+      )}
     </Wrapper>
   );
 }
@@ -429,4 +667,5 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#faf8f5" },
   containerOverMap: { backgroundColor: "transparent" },
   scroll: { paddingHorizontal: 20, alignItems: "center" },
+  gameView: { flex: 1 },
 });
