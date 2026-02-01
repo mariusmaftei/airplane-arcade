@@ -1,0 +1,51 @@
+# Push from root (airplanes-game): client & server are included.
+# Omit node_modules and .env inside client and server:
+node_modules/
+client/node_modules/
+server/node_modules/
+.env
+.env.local
+.env.*.local
+client/.env
+server/.env
+
+# Build and output
+dist/
+build/
+client/dist/
+client/build/
+server/dist/
+
+# Expo / React Native (client)
+.expo/
+client/.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+client/web-build/
+
+# Logs and debug
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Optional: uncomment to ignore lock files (some prefer to commit them)
+# package-lock.json
+# client/package-lock.json
+# server/package-lock.json
