@@ -167,8 +167,8 @@ const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
     width: "100%",
-    marginTop: 8,
-    marginBottom: 4,
+    marginTop: 2,
+    marginBottom: 0,
   },
   row: {
     flexDirection: "row",

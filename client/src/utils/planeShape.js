@@ -10,6 +10,13 @@ export const PLANE_SHAPE = [
 ];
 export const HEAD_INDEX = 0;
 
+const HEAD_OFFSET_BY_ROTATION = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+];
+
 export function getShapeCells(shape, pivotRow, pivotCol, rotation, gridSize) {
   const cells = [];
   for (const { r, c } of shape) {
@@ -22,4 +29,11 @@ export function getShapeCells(shape, pivotRow, pivotCol, rotation, gridSize) {
     cells.push({ row, col });
   }
   return cells;
+}
+
+export function getShapeCellsFromHead(shape, headRow, headCol, rotation, gridSize) {
+  const [dr, dc] = HEAD_OFFSET_BY_ROTATION[rotation % 4] ?? [1, 0];
+  const pivotRow = headRow - dr;
+  const pivotCol = headCol - dc;
+  return getShapeCells(shape, pivotRow, pivotCol, rotation, gridSize);
 }

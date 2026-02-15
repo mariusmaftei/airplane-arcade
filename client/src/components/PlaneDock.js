@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { StyleSheet, View, Text, PanResponder } from "react-native";
+import { StyleSheet, View, Text } from "react-native";
 import { PLANE_SHAPE, getShapeCells } from "../utils/planeShape";
-import { getPlacementCellSize, PLACEMENT_LABEL_WIDTH } from "./PlacementGrid";
+import { getPlacementCellSize } from "./PlacementGrid";
 import { UI_BODY_MUTED } from "../constants/constants";
 
 const DOCK_PIVOTS = [
@@ -13,10 +13,17 @@ const DOCK_PIVOTS = [
 
 const DOCK_GRID_SIZE = 6;
 const DOCK_CELL_PX = 16;
-const SHADOW_SIZE = 96;
-const SHADOW_CELL = SHADOW_SIZE / DOCK_GRID_SIZE;
+const SHADOW_GRID_SIZE = 6;
 
-export function DockDragShadow({ pageX, pageY, rotation, planeColor }) {
+export function DockDragShadow({
+  pageX,
+  pageY,
+  rotation,
+  planeColor,
+  placementGridSize = 10,
+}) {
+  const cellSize = getPlacementCellSize(placementGridSize);
+  const shadowSize = SHADOW_GRID_SIZE * cellSize;
   const shapeCells = useMemo(() => {
     const pivot = DOCK_PIVOTS[rotation] ?? DOCK_PIVOTS[0];
     return (
@@ -25,13 +32,13 @@ export function DockDragShadow({ pageX, pageY, rotation, planeColor }) {
         pivot.row,
         pivot.col,
         rotation,
-        DOCK_GRID_SIZE,
+        SHADOW_GRID_SIZE,
       ) || []
     );
   }, [rotation]);
   const grid = [];
-  for (let r = 0; r < DOCK_GRID_SIZE; r++) {
-    for (let c = 0; c < DOCK_GRID_SIZE; c++) {
+  for (let r = 0; r < SHADOW_GRID_SIZE; r++) {
+    for (let c = 0; c < SHADOW_GRID_SIZE; c++) {
       const filled = shapeCells.some(
         (cell) => cell.row === r && cell.col === c,
       );
@@ -40,8 +47,12 @@ export function DockDragShadow({ pageX, pageY, rotation, planeColor }) {
           key={`${r}-${c}`}
           style={[
             styles.shadowCell,
-            { width: SHADOW_CELL, height: SHADOW_CELL },
-            filled && { backgroundColor: planeColor },
+            { width: cellSize, height: cellSize },
+            filled && {
+              backgroundColor: planeColor,
+              borderWidth: 1,
+              borderColor: "rgba(0,0,0,0.15)",
+            },
           ]}
         />,
       );
@@ -52,15 +63,17 @@ export function DockDragShadow({ pageX, pageY, rotation, planeColor }) {
       style={[
         styles.shadowWrap,
         {
-          left: pageX - SHADOW_SIZE / 2,
-          top: pageY - SHADOW_SIZE / 2,
-          width: SHADOW_SIZE,
-          height: SHADOW_SIZE,
+          left: pageX - shadowSize / 2,
+          top: pageY - shadowSize / 2,
+          width: shadowSize,
+          height: shadowSize,
         },
       ]}
       pointerEvents="none"
     >
-      <View style={styles.shadowGrid}>{grid}</View>
+      <View style={[styles.shadowGrid, { width: shadowSize, height: shadowSize }]}>
+        {grid}
+      </View>
     </View>
   );
 }
@@ -71,14 +84,19 @@ export default function PlaneDock({
   gridWidth,
   boardWidth,
   gridContainerRef,
+  dockPlaneRef,
+  placedPlanes = [],
+  selectedPlaneIndex = 0,
+  hasActivePreview = false,
   onPreviewChange,
   onDragActiveChange,
   onDockDragPosition,
-  isDraggingFromDock = false,
-  isCurrentPlanePlaced = false,
-  planeNumber = 1,
-  planeColor = "#5c6bc0",
+  onDockDragEnd,
+  draggingPlaneIndex = null,
+  planeColors = ["#5c6bc0", "#43a047", "#fb8c00"],
 }) {
+  const isCurrentPlanePlaced = !!placedPlanes[selectedPlaneIndex];
+
   const dockShapeCells = useMemo(() => {
     const pivot = DOCK_PIVOTS[placementRotation] ?? DOCK_PIVOTS[0];
     return (
@@ -92,66 +110,14 @@ export default function PlaneDock({
     );
   }, [placementRotation]);
 
-  const pageToGridCell = (pageX, pageY) => {
-    if (!gridContainerRef?.current) return null;
-    gridContainerRef.current.measureInWindow((gx, gy, gw, gh) => {
-      const localX = pageX - gx;
-      const localY = pageY - gy;
-      const cellSize = getPlacementCellSize(placementGridSize);
-      const col = Math.floor((localX - PLACEMENT_LABEL_WIDTH) / cellSize);
-      const row = Math.floor((localY - cellSize) / cellSize);
-      if (
-        row >= 0 &&
-        row < placementGridSize &&
-        col >= 0 &&
-        col < placementGridSize
-      ) {
-        onPreviewChange({ row, col });
-      }
-    });
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (evt) => {
-          const { pageX, pageY } = evt.nativeEvent;
-          if (onDragActiveChange) onDragActiveChange(true);
-          if (onDockDragPosition) onDockDragPosition({ pageX, pageY });
-        },
-        onPanResponderMove: (evt) => {
-          const { pageX, pageY } = evt.nativeEvent;
-          pageToGridCell(pageX, pageY);
-          if (onDockDragPosition) onDockDragPosition({ pageX, pageY });
-        },
-        onPanResponderRelease: (evt) => {
-          const { pageX, pageY } = evt.nativeEvent;
-          pageToGridCell(pageX, pageY);
-          if (onDockDragPosition) onDockDragPosition(null);
-          if (onDragActiveChange) onDragActiveChange(false);
-        },
-        onPanResponderTerminate: () => {
-          if (onDockDragPosition) onDockDragPosition(null);
-          if (onDragActiveChange) onDragActiveChange(false);
-        },
-      }),
-    [
-      placementGridSize,
-      onPreviewChange,
-      onDragActiveChange,
-      onDockDragPosition,
-      gridContainerRef,
-    ],
-  );
-
+  const previewSize = DOCK_GRID_SIZE * DOCK_CELL_PX;
+  const planeColor = planeColors[selectedPlaneIndex % planeColors.length];
+  const isDragging = draggingPlaneIndex === selectedPlaneIndex;
   const grid = [];
-  const showPlane = !isCurrentPlanePlaced;
   for (let r = 0; r < DOCK_GRID_SIZE; r++) {
     for (let c = 0; c < DOCK_GRID_SIZE; c++) {
       const filled =
-        showPlane &&
+        !isCurrentPlanePlaced &&
         dockShapeCells.some((cell) => cell.row === r && cell.col === c);
       grid.push(
         <View
@@ -166,38 +132,62 @@ export default function PlaneDock({
     }
   }
 
-  const previewSize = DOCK_GRID_SIZE * DOCK_CELL_PX;
-  const previewWidth = gridWidth != null ? gridWidth : boardWidth;
-  const alignWithGrid = gridWidth != null;
   return (
-    <View
-      style={styles.root}
-      {...(!isCurrentPlanePlaced ? panResponder.panHandlers : {})}
-    >
-      {!isCurrentPlanePlaced && (
-        <Text style={styles.hint}>Drag plane onto board below</Text>
+    <View style={styles.root}>
+      {isCurrentPlanePlaced ? (
+        <>
+          <Text style={styles.placedLabel}>
+            Plane {selectedPlaneIndex + 1} placed
+          </Text>
+          <Text style={styles.placedHint}>
+            Select another tab or tap Clear to move it back
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text style={styles.hint}>
+            {hasActivePreview
+              ? "Adjust position on board below, then press Confirm"
+              : `Plane ${selectedPlaneIndex + 1} — drag onto board below`}
+          </Text>
+          {hasActivePreview ? (
+            <View
+              style={[
+                styles.planeWrap,
+                { width: previewSize, height: previewSize },
+                styles.planeWrapDisabled,
+              ]}
+            >
+              <View
+                style={[
+                  styles.grid,
+                  { width: previewSize, height: previewSize },
+                ]}
+              >
+                {grid}
+              </View>
+            </View>
+          ) : (
+            <View
+              ref={dockPlaneRef}
+              style={[
+                styles.planeWrap,
+                { width: previewSize, height: previewSize },
+              ]}
+            >
+              <View
+                style={[
+                  styles.grid,
+                  { width: previewSize, height: previewSize },
+                  isDragging && styles.dockHidden,
+                ]}
+              >
+                {grid}
+              </View>
+            </View>
+          )}
+        </>
       )}
-      <View
-        style={[
-          styles.preview,
-          previewWidth != null && { width: previewWidth },
-          alignWithGrid && styles.previewAlignGrid,
-        ]}
-      >
-        {isCurrentPlanePlaced ? (
-          <Text style={styles.placedText}>Plane {planeNumber} Placed</Text>
-        ) : (
-          <View
-            style={[
-              styles.grid,
-              { width: previewSize, height: previewSize },
-              isDraggingFromDock && styles.dockHidden,
-            ]}
-          >
-            {grid}
-          </View>
-        )}
-      </View>
     </View>
   );
 }
@@ -213,10 +203,16 @@ const styles = StyleSheet.create({
     color: UI_BODY_MUTED,
     marginBottom: 8,
   },
-  placedText: {
+  placedLabel: {
     fontSize: 16,
     fontWeight: "700",
     color: UI_BODY_MUTED,
+  },
+  placedHint: {
+    fontSize: 12,
+    color: UI_BODY_MUTED,
+    marginTop: 4,
+    opacity: 0.9,
   },
   preview: {
     padding: 12,
@@ -227,6 +223,13 @@ const styles = StyleSheet.create({
   },
   previewAlignGrid: {
     alignSelf: "flex-end",
+  },
+  planeWrap: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  planeWrapDisabled: {
+    opacity: 0.6,
   },
   grid: {
     flexDirection: "row",
@@ -244,17 +247,15 @@ const styles = StyleSheet.create({
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 8,
+    elevation: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
   },
   shadowGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    width: SHADOW_SIZE,
-    height: SHADOW_SIZE,
   },
   shadowCell: {
     backgroundColor: "transparent",

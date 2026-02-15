@@ -3,11 +3,11 @@ import {
   StyleSheet,
   View,
   Text,
-  Pressable,
   Image,
   Animated,
   Easing,
 } from "react-native";
+import SoundPressable from "./SoundPressable";
 import {
   MAP_OPTIONS,
   CAROUSEL_SMALL_W,
@@ -30,12 +30,32 @@ import {
 const CAROUSEL_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
 const CAROUSEL_VIEW_CENTER = CAROUSEL_VIEW_W / 2;
 
+const COMPACT_SMALL_W = 50;
+const COMPACT_SMALL_H = 36;
+const COMPACT_BIG_W = 76;
+const COMPACT_BIG_H = 54;
+const COMPACT_GAP = 8;
+const COMPACT_VIEW_W =
+  COMPACT_SMALL_W + COMPACT_GAP + COMPACT_BIG_W + COMPACT_GAP + COMPACT_SMALL_W;
+
 export default function MapCarousel({
   mapOptions = MAP_OPTIONS,
   selectedId,
   onSelect,
+  compact = false,
 }) {
-  const carouselSlide = useRef(new Animated.Value(CAROUSEL_REST_X)).current;
+  const SW = compact ? COMPACT_SMALL_W : CAROUSEL_SMALL_W;
+  const SH = compact ? COMPACT_SMALL_H : CAROUSEL_SMALL_H;
+  const BW = compact ? COMPACT_BIG_W : CAROUSEL_BIG_W;
+  const BH = compact ? COMPACT_BIG_H : CAROUSEL_BIG_H;
+  const GAP = compact ? COMPACT_GAP : CAROUSEL_GAP;
+  const VIEW_W = compact ? COMPACT_VIEW_W : CAROUSEL_VIEW_W;
+  const restX = -(SW + GAP);
+  const step = SW + GAP;
+
+  const carouselSlide = useRef(
+    new Animated.Value(compact ? -(COMPACT_SMALL_W + COMPACT_GAP) : CAROUSEL_REST_X)
+  ).current;
   const carouselAnimating = useRef(false);
 
   const slideToPrev = useCallback(() => {
@@ -50,11 +70,11 @@ export default function MapCarousel({
       easing: CAROUSEL_EASING,
       useNativeDriver: true,
     }).start(() => {
-      carouselSlide.setValue(CAROUSEL_REST_X);
+      carouselSlide.setValue(restX);
       carouselAnimating.current = false;
       requestAnimationFrame(() => onSelect(prevId));
     });
-  }, [selectedId, mapOptions, onSelect, carouselSlide]);
+  }, [selectedId, mapOptions, onSelect, carouselSlide, restX]);
 
   const slideToNext = useCallback(() => {
     if (carouselAnimating.current) return;
@@ -63,24 +83,24 @@ export default function MapCarousel({
     const nextId = mapOptions[(idx + 1) % len].id;
     carouselAnimating.current = true;
     Animated.timing(carouselSlide, {
-      toValue: CAROUSEL_REST_X - CAROUSEL_STEP,
+      toValue: restX - step,
       duration: SLIDE_DURATION,
       easing: CAROUSEL_EASING,
       useNativeDriver: true,
     }).start(() => {
-      carouselSlide.setValue(CAROUSEL_REST_X);
+      carouselSlide.setValue(restX);
       carouselAnimating.current = false;
       requestAnimationFrame(() => onSelect(nextId));
     });
-  }, [selectedId, mapOptions, onSelect, carouselSlide]);
+  }, [selectedId, mapOptions, onSelect, carouselSlide, restX, step]);
 
   const selectById = useCallback(
     (id) => {
       if (carouselAnimating.current) return;
       onSelect(id);
-      carouselSlide.setValue(CAROUSEL_REST_X);
+      carouselSlide.setValue(restX);
     },
-    [onSelect, carouselSlide],
+    [onSelect, carouselSlide, restX],
   );
 
   const mapIndex = mapOptions.findIndex((m) => m.id === selectedId);
@@ -91,54 +111,48 @@ export default function MapCarousel({
   const nextMap = mapOptions[(mapIndex + 1) % len];
   const nextNextMap = mapOptions[(mapIndex + 2) % len];
   const showMaps = [prevPrevMap, prevMap, currMap, nextMap, nextNextMap];
-  const itemWidths = [
-    CAROUSEL_SMALL_W,
-    CAROUSEL_SMALL_W,
-    CAROUSEL_BIG_W,
-    CAROUSEL_SMALL_W,
-    CAROUSEL_SMALL_W,
-  ];
-  const itemHeights = [
-    CAROUSEL_SMALL_H,
-    CAROUSEL_SMALL_H,
-    CAROUSEL_BIG_H,
-    CAROUSEL_SMALL_H,
-    CAROUSEL_SMALL_H,
-  ];
-  const itemCenterX = [32, 106, 196, 286, 360];
-  const c = CAROUSEL_VIEW_CENTER;
+  const itemWidths = [SW, SW, BW, SW, SW];
+  const itemHeights = [SH, SH, BH, SH, SH];
+  const itemCenterX = compact
+    ? [24, 83, 152, 221, 288]
+    : [32, 106, 196, 286, 360];
+  const c = VIEW_W / 2;
+  const scaleRange = compact ? 100 : 140;
   const scaleInputRange = [
-    c - 140,
-    c - 90,
-    c - 50,
-    c - 20,
+    c - scaleRange,
+    c - scaleRange * 0.64,
+    c - scaleRange * 0.36,
+    c - scaleRange * 0.14,
     c,
-    c + 20,
-    c + 50,
-    c + 90,
-    c + 140,
+    c + scaleRange * 0.14,
+    c + scaleRange * 0.36,
+    c + scaleRange * 0.64,
+    c + scaleRange,
   ];
   const scaleOutputRange = [0.78, 0.82, 0.88, 0.94, 1, 0.94, 0.88, 0.82, 0.78];
 
   return (
-    <View style={styles.wrap}>
-      <Pressable
+    <View style={[styles.wrap, compact && styles.wrapCompact]}>
+      <SoundPressable
         style={({ pressed }) => [
           styles.arrowBtn,
+          compact && styles.arrowBtnCompact,
           pressed && styles.arrowBtnPressed,
         ]}
         onPress={slideToPrev}
       >
-        <Text style={styles.arrowText}>‹</Text>
-      </Pressable>
+        <Text style={[styles.arrowText, compact && styles.arrowTextCompact]}>
+          ‹
+        </Text>
+      </SoundPressable>
       <View
-        style={[
-          styles.window,
-          { width: CAROUSEL_VIEW_W, height: CAROUSEL_BIG_H },
-        ]}
+        style={[styles.window, { width: VIEW_W, height: BH }]}
       >
         <Animated.View
-          style={[styles.track, { transform: [{ translateX: carouselSlide }] }]}
+          style={[
+            styles.track,
+            { gap: GAP, transform: [{ translateX: carouselSlide }] },
+          ]}
         >
           {showMaps.map((m, i) => {
             const itemPos = Animated.add(carouselSlide, itemCenterX[i]);
@@ -158,7 +172,7 @@ export default function MapCarousel({
                   },
                 ]}
               >
-                <Pressable
+                <SoundPressable
                   style={[
                     styles.item,
                     {
@@ -184,50 +198,63 @@ export default function MapCarousel({
                         },
                       ]}
                     >
-                      {Array.from({ length: 16 }, (_, k) => (
-                        <View
-                          key={`v-${k}`}
-                          style={[
-                            styles.mathPaperLine,
-                            styles.mathPaperLineV,
-                            {
-                              left: k * 6,
-                              height: itemHeights[i],
-                            },
-                          ]}
-                        />
-                      ))}
-                      {Array.from({ length: 14 }, (_, k) => (
-                        <View
-                          key={`h-${k}`}
-                          style={[
-                            styles.mathPaperLine,
-                            styles.mathPaperLineH,
-                            {
-                              top: k * 6,
-                              width: itemWidths[i],
-                            },
-                          ]}
-                        />
-                      ))}
+                      {Array.from(
+                        {
+                          length: Math.ceil(itemWidths[i] / 6) + 1,
+                        },
+                        (_, k) => (
+                          <View
+                            key={`v-${k}`}
+                            style={[
+                              styles.mathPaperLine,
+                              styles.mathPaperLineV,
+                              {
+                                left: k * 6,
+                                height: itemHeights[i],
+                              },
+                            ]}
+                          />
+                        )
+                      )}
+                      {Array.from(
+                        {
+                          length: Math.ceil(itemHeights[i] / 6) + 1,
+                        },
+                        (_, k) => (
+                          <View
+                            key={`h-${k}`}
+                            style={[
+                              styles.mathPaperLine,
+                              styles.mathPaperLineH,
+                              {
+                                top: k * 6,
+                                width: itemWidths[i],
+                              },
+                            ]}
+                          />
+                        )
+                      )}
                       <Text style={styles.thumbMathPaperText}>Math paper</Text>
                     </View>
                   )}
-                </Pressable>
+                </SoundPressable>
               </Animated.View>
             );
           })}
         </Animated.View>
       </View>
-      <Pressable
+      <SoundPressable
         style={({ pressed }) => [
           styles.arrowBtn,
+          compact && styles.arrowBtnCompact,
           pressed && styles.arrowBtnPressed,
         ]}
         onPress={slideToNext}
       >
-        <Text style={styles.arrowText}>›</Text>
-      </Pressable>
+        <Text style={[styles.arrowText, compact && styles.arrowTextCompact]}>
+          ›
+        </Text>
+      </SoundPressable>
     </View>
   );
 }
@@ -239,6 +266,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     marginBottom: 6,
+  },
+  wrapCompact: {
+    gap: 6,
+    marginBottom: 4,
   },
   arrowBtn: {
     width: 48,
@@ -253,9 +284,17 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 4,
   },
+  arrowBtnCompact: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
   arrowBtnPressed: {
     backgroundColor: UI_PRIMARY_LIGHT,
     transform: [{ scale: 0.96 }],
+  },
+  arrowTextCompact: {
+    fontSize: 22,
   },
   arrowText: {
     fontSize: 28,
@@ -270,7 +309,6 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
   },
   itemWrap: {
     alignItems: "center",

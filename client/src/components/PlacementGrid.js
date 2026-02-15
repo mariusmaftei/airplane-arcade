@@ -1,12 +1,15 @@
 import {
   StyleSheet,
   View,
-  Pressable,
   Text,
   Dimensions,
-  PanResponder,
+  Pressable,
 } from "react-native";
-import { useMemo } from "react";
+import {
+  PanGestureHandler,
+  State,
+} from "react-native-gesture-handler";
+import { useMemo, useRef, useEffect, useCallback } from "react";
 import {
   UI_BODY,
   UI_INPUT_BORDER,
@@ -60,11 +63,18 @@ function getCellPlacementState(
 
 const PLANE_COLORS = ["#5c6bc0", "#43a047", "#fb8c00"];
 
-function coordsToCell(locationX, locationY, cellSize, labelWidth, gridSize) {
+function coordsToCellFromLocal(locationX, locationY, cellSize, labelWidth, gridSize) {
   const col = Math.floor((locationX - labelWidth) / cellSize);
   const row = Math.floor((locationY - cellSize) / cellSize);
   if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) return null;
   return { row, col };
+}
+
+function coordsToCellFromPage(pageX, pageY, gridLayout, cellSize, labelWidth, gridSize) {
+  if (!gridLayout) return null;
+  const localX = pageX - gridLayout.x;
+  const localY = pageY - gridLayout.y;
+  return coordsToCellFromLocal(localX, localY, cellSize, labelWidth, gridSize);
 }
 
 function getCellSize(gridSize) {
@@ -77,6 +87,8 @@ export default function PlacementGrid({
   previewCells = null,
   previewValid = false,
   movingPlaneIndex = null,
+  gridContainerRef,
+  dockDragging = false,
   onCellPress,
   onDragStart,
   onDragMove,
@@ -87,80 +99,113 @@ export default function PlacementGrid({
 }) {
   const cellSize = getCellSize(gridSize);
   const labelFontSize = Math.max(10, Math.min(14, cellSize - 4));
+  const gridLayoutRef = useRef(null);
+  const gridViewRef = useRef(null);
 
-  const getCellFromEvent = (evt) => {
-    const native = evt?.nativeEvent;
-    if (
-      native == null ||
-      typeof native.locationX !== "number" ||
-      typeof native.locationY !== "number"
-    )
-      return null;
-    return coordsToCell(
-      native.locationX,
-      native.locationY,
-      cellSize,
-      LABEL_WIDTH,
-      gridSize,
-    );
-  };
+  const pendingGrantRef = useRef(false);
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: (_, evt) => {
-          const cell = getCellFromEvent(evt);
-          return cell !== null;
-        },
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (_, evt) => {
-          if (onDragActiveChange) onDragActiveChange(true);
-          const cell = getCellFromEvent(evt);
-          if (!cell) return;
-          const state = getCellPlacementState(
-            placedPlanes,
-            previewCells,
-            cell.row,
-            cell.col,
-            movingPlaneIndex,
-          );
-          if (state.type === "plane" && onStartMovePlane) {
-            const plane = placedPlanes[state.index];
-            if (plane?.head)
-              onStartMovePlane(state.index, plane.head.row, plane.head.col);
-          } else if (onDragStart) {
-            onDragStart(cell.row, cell.col);
+  const pageToCell = useCallback(
+    (pageX, pageY) => {
+      const layout = gridLayoutRef.current;
+      if (!layout) return null;
+      return coordsToCellFromPage(
+        pageX,
+        pageY,
+        layout,
+        cellSize,
+        LABEL_WIDTH,
+        gridSize,
+      );
+    },
+    [cellSize, gridSize],
+  );
+
+  const handlePanStateChange = useCallback(
+    (evt) => {
+      const ne = evt?.nativeEvent;
+      if (!ne || ne.state == null) return;
+      const state = ne.state;
+      if (state === State.ACTIVE) {
+        if (onDragActiveChange) onDragActiveChange(true);
+        const ax = ne.absoluteX;
+        const ay = ne.absoluteY;
+        if (typeof ax === "number" && typeof ay === "number") {
+          const cell = pageToCell(ax, ay);
+          if (cell) {
+            const stateObj = getCellPlacementState(
+              placedPlanes,
+              previewCells,
+              cell.row,
+              cell.col,
+              movingPlaneIndex,
+            );
+            if (stateObj.type === "plane" && onStartMovePlane) {
+              const plane = placedPlanes[stateObj.index];
+              if (plane?.head)
+                onStartMovePlane(stateObj.index, plane.head.row, plane.head.col);
+            } else if (onDragStart) {
+              onDragStart(cell.row, cell.col);
+            }
           }
-        },
-        onPanResponderMove: (_, evt) => {
-          const cell = getCellFromEvent(evt);
-          if (cell && onDragMove) onDragMove(cell.row, cell.col);
-        },
-        onPanResponderRelease: () => {
-          if (onDragEnd) onDragEnd();
-          if (onDragActiveChange) onDragActiveChange(false);
-        },
-        onPanResponderTerminate: () => {
-          if (onDragEnd) onDragEnd();
-          if (onDragActiveChange) onDragActiveChange(false);
-        },
-      }),
+        } else {
+          pendingGrantRef.current = true;
+        }
+      } else if (state === State.END || state === State.CANCELLED) {
+        pendingGrantRef.current = false;
+        if (onDragEnd) onDragEnd();
+        if (onDragActiveChange) onDragActiveChange(false);
+      }
+    },
     [
-      gridSize,
-      cellSize,
       placedPlanes,
       previewCells,
       movingPlaneIndex,
       onDragStart,
-      onDragMove,
       onStartMovePlane,
       onDragEnd,
       onDragActiveChange,
+      pageToCell,
+    ],
+  );
+
+  const handlePanGesture = useCallback(
+    (evt) => {
+      const ne = evt?.nativeEvent;
+      if (!ne || typeof ne.absoluteX !== "number" || typeof ne.absoluteY !== "number")
+        return;
+      const cell = pageToCell(ne.absoluteX, ne.absoluteY);
+      if (pendingGrantRef.current && cell) {
+        pendingGrantRef.current = false;
+        const stateObj = getCellPlacementState(
+          placedPlanes,
+          previewCells,
+          cell.row,
+          cell.col,
+          movingPlaneIndex,
+        );
+        if (stateObj.type === "plane" && onStartMovePlane) {
+          const plane = placedPlanes[stateObj.index];
+          if (plane?.head)
+            onStartMovePlane(stateObj.index, plane.head.row, plane.head.col);
+        } else if (onDragStart) {
+          onDragStart(cell.row, cell.col);
+        }
+      }
+      if (cell && onDragMove) onDragMove(cell.row, cell.col);
+    },
+    [
+      pageToCell,
+      onDragMove,
+      placedPlanes,
+      previewCells,
+      movingPlaneIndex,
+      onDragStart,
+      onStartMovePlane,
     ],
   );
 
   const headerRow = (
-    <View key="header" style={styles.row}>
+    <View key="header" style={styles.row} pointerEvents="box-none">
       <View
         style={[styles.labelCell, { width: LABEL_WIDTH, height: cellSize }]}
       />
@@ -200,7 +245,7 @@ export default function PlacementGrid({
       );
       let cellStyle = [styles.cell, { width: cellSize, height: cellSize }];
       if (state.type === "plane")
-        cellStyle.push({
+        cellStyle.push(styles.cellPlane, {
           backgroundColor: PLANE_COLORS[state.index % PLANE_COLORS.length],
         });
       else if (state.type === "preview")
@@ -208,36 +253,104 @@ export default function PlacementGrid({
           previewValid ? styles.cellPreviewValid : styles.cellPreviewInvalid,
         );
       else if (mapBackground) cellStyle.push(styles.cellOverMap);
-      cells.push(
-        <Pressable
-          key={`${r}-${c}`}
-          style={cellStyle}
-          onPress={() => onCellPress(r, c)}
-        >
-          <Text
-            style={[
-              styles.cellText,
-              { fontSize: Math.max(10, cellSize - 6) },
-              state.type !== "empty" && styles.cellTextFilled,
+      if (state.type === "plane" && onStartMovePlane) {
+        const plane = placedPlanes[state.index];
+        cells.push(
+          <Pressable
+            key={`${r}-${c}`}
+            style={({ pressed }) => [
+              cellStyle,
+              pressed && styles.cellPressed,
             ]}
+            onPressIn={() => {
+              if (plane?.head)
+                onStartMovePlane(state.index, plane.head.row, plane.head.col);
+            }}
           >
-            {""}
-          </Text>
-        </Pressable>,
-      );
+            <Text
+              style={[
+                styles.cellText,
+                { fontSize: Math.max(10, cellSize - 6) },
+                styles.cellTextFilled,
+              ]}
+            >
+              {""}
+            </Text>
+          </Pressable>,
+        );
+      } else {
+        const handlePress = onCellPress
+          ? () => onCellPress(r, c)
+          : undefined;
+        cells.push(
+          <Pressable
+            key={`${r}-${c}`}
+            style={({ pressed }) => [
+              cellStyle,
+              pressed && styles.cellPressed,
+            ]}
+            onPressIn={handlePress}
+          >
+            <Text
+              style={[
+                styles.cellText,
+                { fontSize: Math.max(10, cellSize - 6) },
+                state.type !== "empty" && styles.cellTextFilled,
+              ]}
+            >
+              {""}
+            </Text>
+          </Pressable>,
+        );
+      }
     }
     rows.push(
-      <View key={r} style={styles.row}>
+      <View key={r} style={styles.row} pointerEvents="box-none">
         {cells}
       </View>,
     );
   }
   const hasDrag =
-    onDragStart || onDragMove || onStartMovePlane || onDragActiveChange;
-  return (
-    <View style={styles.grid} {...(hasDrag ? panResponder.panHandlers : {})}>
+    !dockDragging &&
+    (onDragStart || onDragMove || onStartMovePlane || onDragActiveChange);
+
+  const measureGrid = useMemo(
+    () => () => {
+      const node = gridViewRef.current ?? gridContainerRef?.current;
+      node?.measureInWindow((x, y, w, h) => {
+        gridLayoutRef.current = { x, y, w: w || 0, h: h || 0 };
+      });
+    },
+    [gridContainerRef],
+  );
+
+  useEffect(() => {
+    if (!gridContainerRef || !hasDrag) return;
+    const id = setTimeout(measureGrid, 50);
+    return () => clearTimeout(id);
+  }, [gridContainerRef, hasDrag, measureGrid]);
+
+  const gridContent = (
+    <View
+      ref={gridViewRef}
+      style={styles.grid}
+      collapsable={false}
+      onLayout={hasDrag ? measureGrid : undefined}
+    >
       {rows}
     </View>
+  );
+
+  if (!hasDrag) return gridContent;
+
+  return (
+    <PanGestureHandler
+      minDist={0}
+      onHandlerStateChange={handlePanStateChange}
+      onGestureEvent={handlePanGesture}
+    >
+      {gridContent}
+    </PanGestureHandler>
   );
 }
 
@@ -256,15 +369,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: UI_UNSELECTED_BG,
   },
+  cellPlane: {
+    borderWidth: 2,
+    borderColor: "rgba(0,0,0,0.2)",
+  },
   cellOverMap: { backgroundColor: "rgba(255,255,255,0.15)" },
   cellPreviewValid: {
-    backgroundColor: "rgba(46, 125, 50, 0.7)",
+    backgroundColor: "rgba(46, 125, 50, 0.85)",
     borderColor: UI_SUCCESS,
+    borderWidth: 2,
   },
   cellPreviewInvalid: {
-    backgroundColor: "rgba(211, 47, 47, 0.7)",
+    backgroundColor: "rgba(211, 47, 47, 0.85)",
     borderColor: UI_DANGER,
+    borderWidth: 2,
   },
   cellText: {},
   cellTextFilled: { color: UI_WHITE },
+  cellPressed: { opacity: 0.7 },
 });

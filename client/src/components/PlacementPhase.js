@@ -1,13 +1,18 @@
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
 import {
   StyleSheet,
   View,
   Text,
-  Pressable,
   ActivityIndicator,
+  Vibration,
 } from "react-native";
+import SoundPressable from "./SoundPressable";
+import { PanGestureHandler, State } from "react-native-gesture-handler";
 import PlacementGrid from "./PlacementGrid";
-import { getPlacementCellSize, PLACEMENT_LABEL_WIDTH } from "./PlacementGrid";
+import {
+  getPlacementCellSize,
+  PLACEMENT_LABEL_WIDTH,
+} from "./PlacementGrid";
 import PlaneDock from "./PlaneDock";
 import {
   UI_PRIMARY,
@@ -16,8 +21,6 @@ import {
   UI_BODY_MUTED,
   UI_SUCCESS,
   UI_UNSELECTED_BG,
-  UI_CARD_BG,
-  UI_SHADOW,
 } from "../constants/constants";
 
 const PLANE_COLORS = ["#5c6bc0", "#43a047", "#fb8c00"];
@@ -36,6 +39,7 @@ export default function PlacementPhase({
   onDragEnd,
   onDragActiveChange,
   onDockDragPosition,
+  onDockDragEnd,
   dockDragPosition,
   placementGridContainerRef,
   movingPlaneIndex = null,
@@ -49,6 +53,8 @@ export default function PlacementPhase({
 }) {
   const internalGridRef = useRef(null);
   const gridContainerRef = placementGridContainerRef ?? internalGridRef;
+  const dockPlaneRef = useRef(null);
+  const dockDragStartedRef = useRef(false);
   const currentPlanePlaced = placedPlanes[selectedPlaneIndex];
   const placedCount = placedPlanes.filter(Boolean).length;
   const totalPlanes = placedPlanes.length;
@@ -56,18 +62,123 @@ export default function PlacementPhase({
   const gridWidth = placementGridSize * boardCellSize;
   const boardWidth = PLACEMENT_LABEL_WIDTH + gridWidth;
 
+  const checkTouchOnDockPlane = useCallback((pageX, pageY) => {
+    return new Promise((resolve) => {
+      if (!dockPlaneRef.current) {
+        resolve(false);
+        return;
+      }
+      dockPlaneRef.current.measureInWindow((x, y, w, h) => {
+        const inside =
+          pageX >= x &&
+          pageX <= x + w &&
+          pageY >= y &&
+          pageY <= y + h;
+        resolve(inside);
+      });
+    });
+  }, []);
+
+  const reportPosition = useCallback(
+    (x, y) => {
+      onDockDragPosition?.({
+        pageX: x,
+        pageY: y,
+        planeIndex: selectedPlaneIndex,
+      });
+    },
+    [onDockDragPosition, selectedPlaneIndex],
+  );
+
+  const handleDockGestureState = useCallback(
+    async (evt) => {
+      const ne = evt?.nativeEvent;
+      if (!ne || ne.state == null) return;
+      if (ne.state === State.ACTIVE) {
+        const x = ne.absoluteX ?? ne.x;
+        const y = ne.absoluteY ?? ne.y;
+        const onDock = await checkTouchOnDockPlane(x, y);
+        if (!onDock) return;
+        dockDragStartedRef.current = true;
+        Vibration.vibrate(30);
+        onDragActiveChange?.(true);
+        reportPosition(x, y);
+      } else if (ne.state === State.END || ne.state === State.CANCELLED) {
+        const started = dockDragStartedRef.current;
+        dockDragStartedRef.current = false;
+        if (!started) return;
+        const x = ne.absoluteX ?? ne.x;
+        const y = ne.absoluteY ?? ne.y;
+        if (!gridContainerRef?.current) {
+          onDockDragPosition?.(null);
+          onDragActiveChange?.(false);
+          onDockDragEnd?.(false, null);
+          return;
+        }
+        gridContainerRef.current.measureInWindow((gx, gy, gw, gh) => {
+          const px = typeof x === "number" ? x : 0;
+          const py = typeof y === "number" ? y : 0;
+          const wasOverGrid =
+            px >= gx && px <= gx + gw && py >= gy && py <= gy + gh;
+          let dropCell = null;
+          if (wasOverGrid) {
+            const cellSize = getPlacementCellSize(placementGridSize);
+            const localX = px - gx;
+            const localY = py - gy;
+            const col = Math.floor(
+              (localX - PLACEMENT_LABEL_WIDTH) / cellSize,
+            );
+            const row = Math.floor((localY - cellSize) / cellSize);
+            if (
+              row >= 0 &&
+              row < placementGridSize &&
+              col >= 0 &&
+              col < placementGridSize
+            ) {
+              dropCell = { row, col };
+            }
+          }
+          onDockDragPosition?.(null);
+          onDragActiveChange?.(false);
+          onDockDragEnd?.(wasOverGrid, dropCell);
+        });
+      }
+    },
+    [
+      placementGridSize,
+      checkTouchOnDockPlane,
+      reportPosition,
+      onDragActiveChange,
+      onDockDragPosition,
+      onDockDragEnd,
+      gridContainerRef,
+    ],
+  );
+
+  const handleDockGesture = useCallback(
+    (evt) => {
+      if (!dockDragStartedRef.current) return;
+      const ne = evt?.nativeEvent;
+      if (!ne) return;
+      const x = ne.absoluteX ?? ne.x;
+      const y = ne.absoluteY ?? ne.y;
+      if (typeof x === "number" && typeof y === "number") reportPosition(x, y);
+    },
+    [reportPosition],
+  );
+
   return (
     <View style={styles.page}>
       <View style={styles.topBar}>
-        <Text style={styles.title}>Place planes</Text>
-        <Text style={styles.step}>
-          {placedCount}/{totalPlanes} placed
-        </Text>
-      </View>
+          <Text style={styles.title}>Place planes</Text>
+          <Text style={styles.step}>
+            {placedCount}/{totalPlanes} placed
+          </Text>
+        </View>
 
-      <View style={styles.tabs}>
+        <View style={styles.tabs}>
         {placedPlanes.map((p, i) => (
-          <Pressable
+          <SoundPressable
             key={i}
             style={({ pressed }) => [
               styles.tab,
@@ -76,30 +187,36 @@ export default function PlacementPhase({
             ]}
             onPress={() => onSelectPlane(i)}
           >
-            <Text
-              style={[
-                styles.tabNum,
-                selectedPlaneIndex === i && styles.tabNumActive,
-              ]}
-            >
-              {i + 1}
-            </Text>
-            {p && (
-              <View style={styles.checkWrap}>
-                <Text
-                  style={[
-                    styles.check,
-                    selectedPlaneIndex === i && styles.checkActive,
-                  ]}
-                >
-                  ✓
-                </Text>
-              </View>
+            {p ? (
+              <Text
+                style={[
+                  styles.check,
+                  selectedPlaneIndex === i && styles.checkActive,
+                ]}
+              >
+                ✓
+              </Text>
+            ) : (
+              <Text
+                style={[
+                  styles.tabNum,
+                  selectedPlaneIndex === i && styles.tabNumActive,
+                ]}
+              >
+                {i + 1}
+              </Text>
             )}
-          </Pressable>
+          </SoundPressable>
         ))}
       </View>
 
+      <PanGestureHandler
+        minDist={0}
+        shouldCancelWhenOutside={false}
+        onHandlerStateChange={handleDockGestureState}
+        onGestureEvent={handleDockGesture}
+      >
+        <View style={[styles.dockAndBoardWrap]}>
       <View
         style={[styles.toolCard, { width: boardWidth, alignSelf: "center" }]}
       >
@@ -109,34 +226,41 @@ export default function PlacementPhase({
           gridWidth={gridWidth}
           boardWidth={boardWidth}
           gridContainerRef={gridContainerRef}
+          dockPlaneRef={dockPlaneRef}
+          placedPlanes={placedPlanes}
+          selectedPlaneIndex={selectedPlaneIndex}
+          hasActivePreview={!!previewAt && movingPlaneIndex == null}
           onPreviewChange={onPreviewChange}
           onDragActiveChange={onDragActiveChange}
           onDockDragPosition={onDockDragPosition}
-          isDraggingFromDock={!!dockDragPosition}
-          isCurrentPlanePlaced={!!placedPlanes[selectedPlaneIndex]}
-          planeNumber={selectedPlaneIndex + 1}
-          planeColor={PLANE_COLORS[selectedPlaneIndex % PLANE_COLORS.length]}
+          onDockDragEnd={onDockDragEnd}
+          draggingPlaneIndex={dockDragPosition?.planeIndex ?? null}
+          planeColors={PLANE_COLORS}
         />
         <View style={styles.toolActions}>
-          <Pressable
+          <SoundPressable
             style={({ pressed }) => [
               styles.actionBtn,
+              previewAt && styles.actionBtnDisabled,
               pressed && styles.actionBtnPressed,
             ]}
             onPress={onRotate}
+            disabled={!!previewAt}
           >
             <Text style={styles.actionBtnText}>↻ Rotate</Text>
-          </Pressable>
-          <Pressable
+          </SoundPressable>
+          <SoundPressable
             style={({ pressed }) => [
               styles.actionBtn,
+              !currentPlanePlaced && !previewAt && styles.actionBtnDisabled,
               pressed && styles.actionBtnPressed,
             ]}
             onPress={onClearPlane}
+            disabled={!currentPlanePlaced && !previewAt}
           >
             <Text style={styles.actionBtnText}>Clear</Text>
-          </Pressable>
-          <Pressable
+          </SoundPressable>
+          <SoundPressable
             style={({ pressed }) => [
               styles.actionBtn,
               styles.actionBtnPrimary,
@@ -144,11 +268,19 @@ export default function PlacementPhase({
                 styles.actionBtnDisabled,
               pressed && styles.actionBtnPressed,
             ]}
-            onPress={onConfirmPlace}
+            onPress={() =>
+              previewAt &&
+              placementPreviewValid &&
+              onConfirmPlace({
+                at: previewAt,
+                planeIndex: selectedPlaneIndex,
+                rotation: placementRotation,
+              })
+            }
             disabled={!previewAt || !placementPreviewValid}
           >
             <Text style={styles.actionBtnTextPrimary}>Confirm</Text>
-          </Pressable>
+          </SoundPressable>
         </View>
       </View>
 
@@ -163,6 +295,8 @@ export default function PlacementPhase({
           previewCells={placementPreviewCells}
           previewValid={placementPreviewValid}
           movingPlaneIndex={movingPlaneIndex}
+          gridContainerRef={gridContainerRef}
+          dockDragging={!!dockDragPosition}
           onCellPress={(row, col) => onPreviewChange({ row, col })}
           onDragStart={(row, col) => onPreviewChange({ row, col })}
           onDragMove={(row, col) => onPreviewChange({ row, col })}
@@ -172,9 +306,11 @@ export default function PlacementPhase({
           mapBackground={false}
         />
       </View>
+        </View>
+      </PanGestureHandler>
 
       <View style={styles.footer}>
-        <Pressable
+        <SoundPressable
           style={({ pressed }) => [
             styles.footerBack,
             pressed && styles.footerBackPressed,
@@ -182,8 +318,8 @@ export default function PlacementPhase({
           onPress={onBack}
         >
           <Text style={styles.footerBackText}>← Back</Text>
-        </Pressable>
-        <Pressable
+        </SoundPressable>
+        <SoundPressable
           style={({ pressed }) => [
             styles.footerStart,
             !allPlaced && styles.footerStartDisabled,
@@ -197,7 +333,7 @@ export default function PlacementPhase({
           ) : (
             <Text style={styles.footerStartText}>Start game</Text>
           )}
-        </Pressable>
+        </SoundPressable>
       </View>
     </View>
   );
@@ -205,6 +341,7 @@ export default function PlacementPhase({
 
 const styles = StyleSheet.create({
   page: {
+    flex: 1,
     width: "100%",
     maxWidth: 440,
     alignSelf: "center",
@@ -229,14 +366,15 @@ const styles = StyleSheet.create({
   },
   tabs: {
     flexDirection: "row",
-    gap: 10,
-    marginBottom: 14,
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
     justifyContent: "center",
   },
   tab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: UI_UNSELECTED_BG,
     alignItems: "center",
     justifyContent: "center",
@@ -248,36 +386,29 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   tabNum: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: "800",
     color: UI_BODY,
   },
   tabNumActive: {
     color: UI_WHITE,
   },
-  checkWrap: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-  },
   check: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: "800",
     color: UI_SUCCESS,
   },
   checkActive: {
     color: UI_WHITE,
   },
+  dockAndBoardWrap: {
+    width: "100%",
+    alignItems: "center",
+  },
   toolCard: {
-    backgroundColor: UI_CARD_BG,
     borderRadius: 16,
     padding: 16,
     marginBottom: 18,
-    shadowColor: UI_SHADOW,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
   },
   toolActions: {
     flexDirection: "row",

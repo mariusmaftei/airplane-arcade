@@ -8,6 +8,7 @@ import {
 import {
   StyleSheet,
   View,
+  Text,
   ScrollView,
   ImageBackground,
   Alert,
@@ -20,6 +21,10 @@ import IntroScreen from "./IntroScreen";
 import MainMenu from "../components/MainMenu";
 import PlacementPhase from "../components/PlacementPhase";
 import { DockDragShadow } from "../components/PlaneDock";
+import {
+  getPlacementCellSize,
+  PLACEMENT_LABEL_WIDTH,
+} from "../components/PlacementGrid";
 import VersusScreen from "../components/VersusScreen";
 import GamePhase from "../components/GamePhase";
 import {
@@ -28,8 +33,18 @@ import {
   giveUp as giveUpApi,
   cpuShoot as cpuShootApi,
 } from "../services/game-services";
-import { PLANE_SHAPE, getShapeCells } from "../utils/planeShape";
-import { DIFFICULTIES, MAP_OPTIONS, UI_PAGE_BG } from "../constants/constants";
+import {
+  PLANE_SHAPE,
+  getShapeCells,
+  getShapeCellsFromHead,
+} from "../utils/planeShape";
+import {
+  DIFFICULTIES,
+  MAP_OPTIONS,
+  UI_PAGE_BG,
+  BATTLE_MUSIC_TRACKS,
+  WINNING_SOUND,
+} from "../constants/constants";
 
 const HIT_SOUND = require("../../assets/sounds/Big Explosion Sound Effect - Lightning Editor.mp3");
 const MISS_SOUND = require("../../assets/sounds/Sound Effect - Missile Launch.mp3");
@@ -54,7 +69,7 @@ export default function GameScreen() {
   const [playerName, setPlayerName] = useState("Player1");
   const [gameMode, setGameMode] = useState("computer");
   const [numPlayers, setNumPlayers] = useState(2);
-  const [customPlacement, setCustomPlacement] = useState(false);
+  const [customPlacement, setCustomPlacement] = useState(true);
   const [placementPhase, setPlacementPhase] = useState(false);
   const [placedPlanes, setPlacedPlanes] = useState([]);
   const [selectedPlaneIndex, setSelectedPlaneIndex] = useState(0);
@@ -85,8 +100,12 @@ export default function GameScreen() {
   const explosionTimeoutRef = useRef(null);
   const smokeTimeoutRef = useRef(null);
   const turnSwitchTimeoutRef = useRef(null);
+  const battleTrackIndexRef = useRef(0);
+  const isBattleActiveRef = useRef(false);
   const hitPlayer = useAudioPlayer(HIT_SOUND, { shouldPlay: false });
   const missPlayer = useAudioPlayer(MISS_SOUND, { shouldPlay: false });
+  const battleMusicPlayer = useAudioPlayer(null, { shouldPlay: false });
+  const winningPlayer = useAudioPlayer(WINNING_SOUND, { shouldPlay: false });
 
   const difficultyConfig =
     DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
@@ -112,6 +131,65 @@ export default function GameScreen() {
       interruptionMode: "mixWithOthers",
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    hitPlayer.volume = 0.4;
+    missPlayer.volume = 0.5;
+    winningPlayer.volume = 0.6;
+  }, [hitPlayer, missPlayer, winningPlayer]);
+
+  useEffect(() => {
+    if (playerWon === true) {
+      winningPlayer.seekTo(0);
+      winningPlayer.play();
+    }
+  }, [playerWon, winningPlayer]);
+
+  const isBattleActive =
+    gameId && !placementPhase && !gameOver && !gaveUp;
+  isBattleActiveRef.current = isBattleActive;
+
+  const playNextBattleTrack = useCallback(() => {
+    if (BATTLE_MUSIC_TRACKS.length === 0) return;
+    const nextIndex =
+      (battleTrackIndexRef.current + 1) % BATTLE_MUSIC_TRACKS.length;
+    battleTrackIndexRef.current = nextIndex;
+    const track = BATTLE_MUSIC_TRACKS[nextIndex];
+    battleMusicPlayer.replace(track);
+    battleMusicPlayer.volume = 0.35;
+    battleMusicPlayer.loop = false;
+    battleMusicPlayer.seekTo(0);
+    battleMusicPlayer.play();
+  }, [battleMusicPlayer]);
+
+  useEffect(() => {
+    if (isBattleActive) {
+      battleTrackIndexRef.current = Math.floor(
+        Math.random() * BATTLE_MUSIC_TRACKS.length,
+      );
+      const track =
+        BATTLE_MUSIC_TRACKS[battleTrackIndexRef.current];
+      battleMusicPlayer.replace(track);
+      battleMusicPlayer.volume = 0.35;
+      battleMusicPlayer.loop = false;
+      battleMusicPlayer.seekTo(0);
+      battleMusicPlayer.play();
+    } else {
+      battleMusicPlayer.pause();
+    }
+  }, [isBattleActive, battleMusicPlayer]);
+
+  useEffect(() => {
+    const disposer = battleMusicPlayer?.addListener?.(
+      "playbackStatusUpdate",
+      (status) => {
+        if (status?.didJustFinish && isBattleActiveRef.current) {
+          playNextBattleTrack();
+        }
+      },
+    );
+    return () => disposer?.remove?.();
+  }, [battleMusicPlayer, playNextBattleTrack]);
 
   useEffect(() => {
     if (cooldownRemaining <= 0) return;
@@ -142,8 +220,27 @@ export default function GameScreen() {
       const inside =
         pageX >= x && pageX <= x + w && pageY >= y && pageY <= y + h;
       setDockDragOverGrid(inside);
+      if (inside && placementPhase) {
+        const cellSize = getPlacementCellSize(placementGridSize);
+        const localX = pageX - x;
+        const localY = pageY - y;
+        const col = Math.floor((localX - PLACEMENT_LABEL_WIDTH) / cellSize);
+        const row = Math.floor((localY - cellSize) / cellSize);
+        if (
+          row >= 0 &&
+          row < placementGridSize &&
+          col >= 0 &&
+          col < placementGridSize
+        ) {
+          setPreviewAt({ row, col });
+        } else {
+          setPreviewAt(null);
+        }
+      } else if (inside === false) {
+        setPreviewAt(null);
+      }
     });
-  }, [dockDragPosition]);
+  }, [dockDragPosition, placementPhase, placementGridSize]);
 
   const startNewGame = useCallback(async () => {
     setLoading(true);
@@ -184,36 +281,52 @@ export default function GameScreen() {
     setPlacementPhase(true);
   }, [difficultyConfig.numPlanes]);
 
-  const handleConfirmPlace = useCallback(() => {
-    if (!previewAt) return;
-    const cells = getShapeCells(
-      PLANE_SHAPE,
-      previewAt.row,
-      previewAt.col,
-      placementRotation,
-      placementGridSize,
-    );
-    if (!cells) return;
-    setPlacedPlanes((prev) => {
-      const next = [...prev];
-      next[selectedPlaneIndex] = {
-        id: selectedPlaneIndex + 1,
-        cells,
-        head: cells[0],
-        rotation: placementRotation,
-      };
-      return next;
-    });
+  const handleConfirmPlace = useCallback(
+    (arg) => {
+      const at = typeof arg === "object" && arg?.at ? arg.at : arg ?? previewAt;
+      if (!at) return;
+      const planeIndex =
+        typeof arg === "object" && typeof arg?.planeIndex === "number"
+          ? arg.planeIndex
+          : selectedPlaneIndex;
+      const rotation =
+        typeof arg === "object" && typeof arg?.rotation === "number"
+          ? arg.rotation
+          : movingPlaneIndex != null
+            ? placedPlanes[movingPlaneIndex]?.rotation ?? 0
+            : placementRotation;
+      const cells = getShapeCellsFromHead(
+        PLANE_SHAPE,
+        at.row,
+        at.col,
+        rotation,
+        placementGridSize,
+      );
+      if (!cells) return;
+      setPlacedPlanes((prev) => {
+        const next = prev.length ? [...prev] : Array(placementNumPlanes).fill(null);
+        next[planeIndex] = {
+          id: planeIndex + 1,
+          cells,
+          head: cells[0],
+          rotation,
+        };
+        return next;
+      });
     setPreviewAt(null);
-    setMovingPlaneIndex(null);
+      setMovingPlaneIndex(null);
+    setDockDragPosition(null);
     setSelectedPlaneIndex((i) => Math.min(i + 1, placementNumPlanes - 1));
-  }, [
-    previewAt,
-    placementRotation,
-    placementGridSize,
-    selectedPlaneIndex,
-    placementNumPlanes,
-  ]);
+  },
+    [
+      previewAt,
+      placementGridSize,
+      selectedPlaneIndex,
+      placementNumPlanes,
+      movingPlaneIndex,
+      placedPlanes,
+    ],
+  );
 
   const handleClearPlane = useCallback(() => {
     setPlacedPlanes((prev) => {
@@ -223,7 +336,15 @@ export default function GameScreen() {
     });
     setPreviewAt(null);
     setMovingPlaneIndex(null);
+    setDockDragPosition(null);
   }, [selectedPlaneIndex]);
+
+  const handleSelectPlane = useCallback((index) => {
+    setSelectedPlaneIndex(index);
+    setPreviewAt(null);
+    setMovingPlaneIndex(null);
+    setDockDragPosition(null);
+  }, []);
 
   const handleStartMovePlane = useCallback(
     (planeIndex, headRow, headCol) => {
@@ -237,13 +358,22 @@ export default function GameScreen() {
 
   const handleEndMovePlane = useCallback(() => {
     if (movingPlaneIndex == null) return;
-    if (previewAt && placementPreviewValid) {
-      handleConfirmPlace();
-    } else {
+    if (!previewAt || !placementPreviewValid) {
       setPreviewAt(null);
     }
     setMovingPlaneIndex(null);
-  }, [movingPlaneIndex, previewAt, placementPreviewValid, handleConfirmPlace]);
+  }, [movingPlaneIndex, previewAt, placementPreviewValid]);
+
+  const handleDockDragEnd = useCallback(
+    (wasOverGrid, dropCell) => {
+      if (wasOverGrid && dropCell) {
+        setPreviewAt(dropCell);
+      } else {
+        setPreviewAt(null);
+      }
+    },
+    [],
+  );
 
   const startGameFromPlacement = useCallback(async () => {
     const planes = placedPlanes
@@ -525,7 +655,7 @@ export default function GameScreen() {
       : placementRotation;
   const placementPreviewCells =
     previewAt &&
-    getShapeCells(
+    getShapeCellsFromHead(
       PLANE_SHAPE,
       previewAt.row,
       previewAt.col,
@@ -567,9 +697,13 @@ export default function GameScreen() {
     (!isMatch || isPlayerTurn);
 
   const mapOption = MAP_OPTIONS.find((m) => m.id === mapId);
-  const Wrapper = mapId === "default" ? View : ImageBackground;
+  const isMainMenu = !gameId && !placementPhase;
+  const Wrapper =
+    isMainMenu ? View : mapId === "default" ? View : ImageBackground;
   const wrapperProps =
-    mapId === "default" ? {} : { source: mapOption?.image, style: { flex: 1 } };
+    isMainMenu || mapId === "default"
+      ? {}
+      : { source: mapOption?.image, style: { flex: 1 } };
   const insets = useSafeAreaInsets();
 
   const handleCoordShoot = useCallback(() => {
@@ -584,40 +718,46 @@ export default function GameScreen() {
   return (
     <Wrapper
       {...wrapperProps}
-      style={[styles.container, mapId !== "default" && styles.containerOverMap]}
+      style={[
+        styles.container,
+        !isMainMenu && mapId !== "default" && styles.containerOverMap,
+      ]}
     >
-      {mapId === "default" && (
+      {(isMainMenu || mapId === "default" || placementPhase) && (
         <MathPaperBackground
           gridSize={placementPhase ? placementGridSize : gridSize}
         />
       )}
       {placementPhase ? (
         <>
-          <ScrollView
-            scrollEnabled={!placementGridDragging}
-            contentContainerStyle={[
+          <View
+            style={[
               styles.scroll,
+              styles.placementWrapper,
               {
                 paddingTop: 20 + insets.top,
                 paddingBottom: 40 + insets.bottom,
               },
             ]}
-            keyboardShouldPersistTaps="handled"
           >
             <PlacementPhase
               selectedPlaneIndex={selectedPlaneIndex}
-              onSelectPlane={setSelectedPlaneIndex}
+              onSelectPlane={handleSelectPlane}
               placedPlanes={placedPlanes}
               placementRotation={placementRotation}
               onRotate={() => setPlacementRotation((r) => (r + 1) % 4)}
               onClearPlane={handleClearPlane}
               previewAt={previewAt}
-              onPreviewChange={setPreviewAt}
+              onPreviewChange={(pos) => {
+                setPreviewAt(pos);
+                setDockDragPosition(null);
+              }}
               onConfirmPlace={handleConfirmPlace}
               onStartMovePlane={handleStartMovePlane}
               onDragEnd={handleEndMovePlane}
               onDragActiveChange={setPlacementGridDragging}
               onDockDragPosition={setDockDragPosition}
+              onDockDragEnd={handleDockDragEnd}
               dockDragPosition={dockDragPosition}
               placementGridContainerRef={placementGridContainerRef}
               movingPlaneIndex={movingPlaneIndex}
@@ -629,30 +769,48 @@ export default function GameScreen() {
               onStartGame={startGameFromPlacement}
               loading={loading}
             />
-          </ScrollView>
-          {dockDragPosition && !dockDragOverGrid && (
+          </View>
+          {dockDragPosition && (
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <View
+                style={[
+                  styles.dragBanner,
+                  { top: 20 + insets.top + 8 },
+                ]}
+              >
+                <Text style={styles.dragBannerText}>
+                  Holding plane{" "}
+                  {(dockDragPosition.planeIndex ?? selectedPlaneIndex) + 1} •{" "}
+                  Release on board to place
+                </Text>
+              </View>
+              {!dockDragOverGrid && (
               <DockDragShadow
                 pageX={dockDragPosition.pageX}
                 pageY={dockDragPosition.pageY}
                 rotation={placementRotation}
+                placementGridSize={placementGridSize}
                 planeColor={
-                  PLANE_COLORS[selectedPlaneIndex % PLANE_COLORS.length]
+                  PLANE_COLORS[
+                    (dockDragPosition.planeIndex ?? selectedPlaneIndex) %
+                      PLANE_COLORS.length
+                  ]
                 }
               />
+              )}
             </View>
           )}
         </>
       ) : !gameId ? (
-        <ScrollView
-          contentContainerStyle={[
+        <View
+          style={[
             styles.scroll,
+            styles.mainMenuWrapper,
             {
               paddingTop: 20 + insets.top,
               paddingBottom: 40 + insets.bottom,
             },
           ]}
-          keyboardShouldPersistTaps="handled"
         >
           <MainMenu
             playerName={playerName}
@@ -671,7 +829,7 @@ export default function GameScreen() {
             onNewGame={startNewGame}
             onPlacePlanes={startPlacementPhase}
           />
-        </ScrollView>
+        </View>
       ) : showVersusScreen ? (
         <View style={styles.gameView}>
           {mapId === "default" && <MathPaperBackground gridSize={gridSize} />}
@@ -760,5 +918,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: UI_PAGE_BG },
   containerOverMap: { backgroundColor: "transparent" },
   scroll: { paddingHorizontal: 20, alignItems: "center" },
+  placementWrapper: { flex: 1 },
+  mainMenuWrapper: { flex: 1, justifyContent: "center" },
   gameView: { flex: 1 },
+  dragBanner: {
+    position: "absolute",
+    top: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: "rgba(44, 62, 80, 0.95)",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignSelf: "center",
+    elevation: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  dragBannerText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#fff",
+    textAlign: "center",
+  },
 });

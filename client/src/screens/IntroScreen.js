@@ -1,4 +1,5 @@
-import { StyleSheet, View, Text, Pressable, Image } from "react-native";
+import { StyleSheet, View, Text, Image } from "react-native";
+import SoundPressable from "../components/SoundPressable";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -31,7 +32,7 @@ export default function IntroScreen({ onBegin }) {
         )}
         <Text style={styles.title}>Airplane Arcade</Text>
         <Text style={styles.tagline}>Find and destroy the hidden planes</Text>
-        <Pressable
+        <SoundPressable
           style={({ pressed }) => [
             styles.button,
             pressed && styles.buttonPressed,
@@ -39,7 +40,7 @@ export default function IntroScreen({ onBegin }) {
           onPress={onBegin}
         >
           <Text style={styles.buttonText}>Press to Begin</Text>
-        </Pressable>
+        </SoundPressable>
       </View>
     </View>
   );

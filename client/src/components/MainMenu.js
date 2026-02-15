@@ -1,16 +1,18 @@
+import { useState } from "react";
 import {
   StyleSheet,
   View,
   Text,
-  Pressable,
   ActivityIndicator,
   TextInput,
+  Image,
 } from "react-native";
+import SoundPressable from "./SoundPressable";
 import {
   DIFFICULTIES,
   MAP_OPTIONS,
-  MATH_PAPER_BG,
   UI_PRIMARY,
+  INTRO_IMAGE,
   UI_BODY,
   UI_BODY_MUTED,
   UI_CARD_BG,
@@ -21,10 +23,7 @@ import {
   UI_SHADOW,
 } from "../constants/constants";
 import MapCarousel from "./MapCarousel";
-
-const GRID_PREVIEW_CELL = 5;
-const GRID_PREVIEW_SIZES = { easy: 4, medium: 5, hard: 6 };
-const GRID_PREVIEW_LINE = "#b0bec5";
+import BoardPreview from "./BoardPreview";
 
 const GAME_MODES = [
   { id: "computer", label: "vs Computer" },
@@ -51,242 +50,269 @@ export default function MainMenu({
   onNewGame,
   onPlacePlanes,
 }) {
+  const [stage, setStage] = useState(1);
   const isMultiplayer = gameMode === "multiplayer";
 
   return (
     <View style={styles.content}>
       <View style={styles.header}>
+        {stage === 1 && (
+          <Image source={INTRO_IMAGE} style={styles.logo} resizeMode="contain" />
+        )}
         <Text style={styles.title}>Airplane Arcade</Text>
         <Text style={styles.tagline}>Place. Shoot. Sink.</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Your name</Text>
-        <TextInput
-          style={styles.nameInput}
-          value={playerName}
-          onChangeText={onPlayerNameChange}
-          placeholder="Player1"
-          placeholderTextColor="#9ca3af"
-          maxLength={20}
-        />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Game mode</Text>
-        <View style={styles.pillRow}>
-          {GAME_MODES.map((m) => (
-            <Pressable
-              key={m.id}
-              style={({ pressed }) => [
-                styles.pill,
-                gameMode === m.id ? styles.pillSelected : styles.pillUnselected,
-                pressed && styles.pillPressed,
-              ]}
-              onPress={() => onGameModeChange(m.id)}
-            >
-              <Text
-                style={[
-                  styles.pillText,
-                  gameMode === m.id
-                    ? styles.pillTextSelected
-                    : styles.pillTextUnselected,
-                ]}
-              >
-                {m.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </View>
-
-      {isMultiplayer && (
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Number of players</Text>
-          <View style={styles.chipRow}>
-            {Array.from(
-              { length: MAX_PLAYERS - MIN_PLAYERS + 1 },
-              (_, i) => MIN_PLAYERS + i,
-            ).map((n) => (
-              <Pressable
-                key={n}
-                style={({ pressed }) => [
-                  styles.chip,
-                  numPlayers === n
-                    ? styles.chipSelected
-                    : styles.chipUnselected,
-                  pressed && styles.chipPressed,
-                ]}
-                onPress={() => onNumPlayersChange(n)}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    numPlayers === n
-                      ? styles.chipTextSelected
-                      : styles.chipTextUnselected,
-                  ]}
-                >
-                  {n}
-                </Text>
-              </Pressable>
-            ))}
+      {stage === 1 ? (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Your name</Text>
+            <TextInput
+              style={styles.nameInput}
+              value={playerName}
+              onChangeText={onPlayerNameChange}
+              placeholder="Player1"
+              placeholderTextColor="#9ca3af"
+              maxLength={20}
+            />
           </View>
-          <Text style={styles.hint}>
-            {numPlayers === 2 ? "1 vs 1" : `${numPlayers} players`}
-          </Text>
-        </View>
-      )}
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Difficulty</Text>
-        <View style={styles.diffRow}>
-          {DIFFICULTIES.map((d) => {
-            const isActive = difficulty === d.id;
-            const size = GRID_PREVIEW_SIZES[d.id] ?? 4;
-            const total = size * GRID_PREVIEW_CELL;
-            return (
-              <Pressable
-                key={d.id}
-                style={({ pressed }) => [
-                  styles.diffCard,
-                  isActive
-                    ? styles.diffCardSelected
-                    : styles.diffCardUnselected,
-                  pressed && styles.diffCardPressed,
-                ]}
-                onPress={() => onDifficultyChange(d.id)}
-              >
-                <View
-                  style={[
-                    styles.diffGridPreview,
-                    {
-                      width: total,
-                      height: total,
-                      backgroundColor: isActive
-                        ? "rgba(255,255,255,0.2)"
-                        : MATH_PAPER_BG,
-                    },
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Game mode</Text>
+            <View style={styles.pillRow}>
+              {GAME_MODES.map((m) => (
+                <SoundPressable
+                  key={m.id}
+                  style={({ pressed }) => [
+                    styles.pill,
+                    gameMode === m.id
+                      ? styles.pillSelected
+                      : styles.pillUnselected,
+                    pressed && styles.pillPressed,
                   ]}
+                  onPress={() => onGameModeChange(m.id)}
                 >
-                  {Array.from({ length: size * size }, (_, i) => (
-                    <View
-                      key={i}
+                  <Text
+                    style={[
+                      styles.pillText,
+                      gameMode === m.id
+                        ? styles.pillTextSelected
+                        : styles.pillTextUnselected,
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </SoundPressable>
+              ))}
+            </View>
+          </View>
+
+          {isMultiplayer && (
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>Number of players</Text>
+              <View style={styles.chipRow}>
+                {Array.from(
+                  { length: MAX_PLAYERS - MIN_PLAYERS + 1 },
+                  (_, i) => MIN_PLAYERS + i,
+                ).map((n) => (
+                  <SoundPressable
+                    key={n}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      numPlayers === n
+                        ? styles.chipSelected
+                        : styles.chipUnselected,
+                      pressed && styles.chipPressed,
+                    ]}
+                    onPress={() => onNumPlayersChange(n)}
+                  >
+                    <Text
                       style={[
-                        styles.diffGridCell,
-                        {
-                          width: GRID_PREVIEW_CELL,
-                          height: GRID_PREVIEW_CELL,
-                          borderColor: isActive
-                            ? "rgba(255,255,255,0.5)"
-                            : GRID_PREVIEW_LINE,
-                        },
+                        styles.chipText,
+                        numPlayers === n
+                          ? styles.chipTextSelected
+                          : styles.chipTextUnselected,
                       ]}
-                    />
-                  ))}
-                </View>
-                <Text
-                  style={[
-                    styles.diffLabel,
-                    isActive
-                      ? styles.diffLabelSelected
-                      : styles.diffLabelUnselected,
-                  ]}
-                >
-                  {d.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.diffDesc,
-                    isActive
-                      ? styles.diffDescSelected
-                      : styles.diffDescUnselected,
-                  ]}
-                >
-                  {d.desc}
-                </Text>
-                <Text
-                  style={[
-                    styles.diffSize,
-                    isActive
-                      ? styles.diffSizeSelected
-                      : styles.diffSizeUnselected,
-                  ]}
-                >
-                  {d.gridSize}×{d.gridSize}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
+                    >
+                      {n}
+                    </Text>
+                  </SoundPressable>
+                ))}
+              </View>
+              <Text style={styles.hint}>
+                {numPlayers === 2 ? "1 vs 1" : `${numPlayers} players`}
+              </Text>
+            </View>
+          )}
 
-      <View style={styles.card}>
-        <Text style={styles.sectionLabel}>Map</Text>
-        <MapCarousel
-          mapOptions={MAP_OPTIONS}
-          selectedId={mapId}
-          onSelect={onMapIdChange}
-        />
-        <Text style={styles.mapName}>
-          {MAP_OPTIONS.find((m) => m.id === mapId)?.label ?? "Default"}
-        </Text>
-      </View>
-
-      <Pressable
-        style={({ pressed }) => [
-          styles.toggleRow,
-          customPlacement && styles.toggleRowActive,
-          pressed && styles.toggleRowPressed,
-        ]}
-        onPress={onCustomPlacementToggle}
-      >
-        <Text
-          style={[
-            styles.toggleLabel,
-            customPlacement
-              ? styles.toggleLabelActive
-              : styles.toggleLabelUnselected,
-          ]}
-        >
-          Custom placement
-        </Text>
-        <View
-          style={[
-            styles.togglePill,
-            customPlacement ? styles.togglePillOn : styles.togglePillOff,
-          ]}
-        >
-          <Text
-            style={[
-              styles.togglePillText,
-              customPlacement
-                ? styles.togglePillTextOn
-                : styles.togglePillTextOff,
+          <SoundPressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
             ]}
+            onPress={() => setStage(2)}
           >
-            {customPlacement ? "On" : "Off"}
-          </Text>
-        </View>
-      </Pressable>
+            <Text style={styles.primaryButtonText}>Continue</Text>
+          </SoundPressable>
+        </>
+      ) : (
+        <>
+          <SoundPressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+            onPress={() => setStage(1)}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </SoundPressable>
 
-      <Pressable
-        style={({ pressed }) => [
-          styles.primaryButton,
-          loading && styles.primaryButtonDisabled,
-          pressed && !loading && styles.primaryButtonPressed,
-        ]}
-        onPress={customPlacement ? onPlacePlanes : onNewGame}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.primaryButtonText}>
-            {customPlacement ? "Place planes" : "New Game"}
-          </Text>
-        )}
-      </Pressable>
+          <View style={[styles.card, styles.cardCompact]}>
+            <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
+              Difficulty
+            </Text>
+            <View style={[styles.diffRow, styles.diffRowCompact]}>
+              {DIFFICULTIES.map((d) => {
+                const isActive = difficulty === d.id;
+                return (
+                  <SoundPressable
+                    key={d.id}
+                    style={({ pressed }) => [
+                      styles.diffCard,
+                      styles.diffCardCompact,
+                      isActive
+                        ? styles.diffCardSelected
+                        : styles.diffCardUnselected,
+                      pressed && styles.diffCardPressed,
+                    ]}
+                    onPress={() => onDifficultyChange(d.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.diffLabel,
+                        styles.diffLabelCompact,
+                        isActive
+                          ? styles.diffLabelSelected
+                          : styles.diffLabelUnselected,
+                      ]}
+                    >
+                      {d.label}
+                    </Text>
+                  </SoundPressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>Board preview</Text>
+            {(() => {
+              const d = DIFFICULTIES.find((x) => x.id === difficulty);
+              return d ? (
+                <Text style={styles.hint}>
+                  {d.desc} • {d.gridSize}×{d.gridSize} grid • {d.numPlanes}{" "}
+                  plane
+                  {d.numPlanes > 1 ? "s" : ""}
+                </Text>
+              ) : null;
+            })()}
+            <View style={styles.boardPreviewWrap}>
+              <BoardPreview
+                gridSize={
+                  DIFFICULTIES.find((d) => d.id === difficulty)?.gridSize ?? 10
+                }
+                mapId={mapId}
+                size={112}
+              />
+            </View>
+            <Text style={styles.mapName}>
+              {MAP_OPTIONS.find((m) => m.id === mapId)?.label ?? "Default"}
+            </Text>
+          </View>
+
+          <View style={[styles.card, styles.cardCompact]}>
+            <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
+              Map
+            </Text>
+            <MapCarousel
+              mapOptions={MAP_OPTIONS}
+              selectedId={mapId}
+              onSelect={onMapIdChange}
+              compact
+            />
+          </View>
+
+          <View style={[styles.card, styles.cardCompact]}>
+            <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
+              Plane placement
+            </Text>
+            <View style={[styles.pillRow, styles.pillRowCompact]}>
+              <SoundPressable
+                style={({ pressed }) => [
+                  styles.pill,
+                  styles.pillCompact,
+                  customPlacement ? styles.pillSelected : styles.pillUnselected,
+                  pressed && styles.pillPressed,
+                ]}
+                onPress={() => !customPlacement && onCustomPlacementToggle()}
+              >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      styles.pillTextCompact,
+                      customPlacement
+                      ? styles.pillTextSelected
+                      : styles.pillTextUnselected,
+                  ]}
+                >
+                  Custom
+                </Text>
+              </SoundPressable>
+              <SoundPressable
+                style={({ pressed }) => [
+                  styles.pill,
+                  styles.pillCompact,
+                  !customPlacement
+                    ? styles.pillSelected
+                    : styles.pillUnselected,
+                  pressed && styles.pillPressed,
+                ]}
+                onPress={() => customPlacement && onCustomPlacementToggle()}
+              >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      styles.pillTextCompact,
+                      !customPlacement
+                      ? styles.pillTextSelected
+                      : styles.pillTextUnselected,
+                  ]}
+                >
+                  Random
+                </Text>
+              </SoundPressable>
+            </View>
+          </View>
+
+          <SoundPressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              loading && styles.primaryButtonDisabled,
+              pressed && !loading && styles.primaryButtonPressed,
+            ]}
+            onPress={customPlacement ? onPlacePlanes : onNewGame}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>
+                {customPlacement ? "Place planes" : "Start Game"}
+              </Text>
+            )}
+          </SoundPressable>
+        </>
+      )}
     </View>
   );
 }
@@ -299,8 +325,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   header: {
-    marginBottom: 28,
+    marginBottom: 20,
     alignItems: "center",
+  },
+  logo: {
+    width: 160,
+    height: 128,
+    marginBottom: 16,
+  },
+  backButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    marginBottom: 12,
+  },
+  backButtonPressed: {
+    opacity: 0.7,
+  },
+  backButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: UI_BODY_MUTED,
   },
   title: {
     fontSize: 28,
@@ -326,6 +371,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 3,
   },
+  cardCompact: {
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    marginBottom: 11,
+  },
   sectionLabel: {
     fontSize: 12,
     color: UI_BODY_MUTED,
@@ -333,6 +383,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.8,
+  },
+  sectionLabelCompact: {
+    fontSize: 10,
+    marginBottom: 10,
   },
   nameInput: {
     paddingVertical: 14,
@@ -349,12 +403,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  pillRowCompact: {
+    gap: 8,
+    marginTop: 10,
+  },
   pill: {
     flex: 1,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
+  },
+  pillCompact: {
+    paddingVertical: 11,
   },
   pillUnselected: {
     backgroundColor: UI_UNSELECTED_BG,
@@ -368,6 +429,9 @@ const styles = StyleSheet.create({
   pillText: {
     fontSize: 15,
     fontWeight: "700",
+  },
+  pillTextCompact: {
+    fontSize: 12,
   },
   pillTextUnselected: {
     color: UI_BODY_MUTED,
@@ -417,6 +481,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
+  diffRowCompact: {
+    gap: 8,
+  },
   diffCard: {
     flex: 1,
     paddingVertical: 14,
@@ -434,13 +501,9 @@ const styles = StyleSheet.create({
   diffCardPressed: {
     opacity: 0.95,
   },
-  diffGridPreview: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 10,
-  },
-  diffGridCell: {
-    borderWidth: 1,
+  diffCardCompact: {
+    paddingVertical: 11,
+    paddingHorizontal: 8,
   },
   diffLabel: {
     fontSize: 15,
@@ -452,27 +515,8 @@ const styles = StyleSheet.create({
   diffLabelSelected: {
     color: UI_WHITE,
   },
-  diffDesc: {
-    fontSize: 11,
-    marginTop: 2,
-    fontWeight: "500",
-  },
-  diffDescUnselected: {
-    color: UI_BODY_MUTED,
-  },
-  diffDescSelected: {
-    color: "rgba(255,255,255,0.9)",
-  },
-  diffSize: {
-    fontSize: 10,
-    marginTop: 2,
-    fontWeight: "600",
-  },
-  diffSizeUnselected: {
-    color: UI_BODY_MUTED,
-  },
-  diffSizeSelected: {
-    color: "rgba(255,255,255,0.75)",
+  diffLabelCompact: {
+    fontSize: 12,
   },
   mapName: {
     fontSize: 15,
@@ -481,57 +525,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: "center",
   },
-  toggleRow: {
-    flexDirection: "row",
+  mapNameCompact: {
+    fontSize: 12,
+    marginTop: 8,
+  },
+  boardPreviewWrap: {
+    marginTop: 12,
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    borderRadius: 14,
-    marginBottom: 18,
-    backgroundColor: UI_CARD_BG,
-    shadowColor: UI_SHADOW,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  toggleRowActive: {
-    backgroundColor: UI_PRIMARY,
-  },
-  toggleRowPressed: {
-    opacity: 0.98,
-  },
-  toggleLabel: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  toggleLabelUnselected: {
-    color: UI_BODY,
-  },
-  toggleLabelActive: {
-    color: "#fff",
-  },
-  togglePill: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-  },
-  togglePillOff: {
-    backgroundColor: UI_UNSELECTED_BG,
-  },
-  togglePillOn: {
-    backgroundColor: "rgba(255,255,255,0.25)",
-  },
-  togglePillText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  togglePillTextOff: {
-    color: UI_BODY_MUTED,
-  },
-  togglePillTextOn: {
-    color: UI_WHITE,
   },
   primaryButton: {
     backgroundColor: UI_PRIMARY,

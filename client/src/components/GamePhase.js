@@ -75,6 +75,46 @@ const styles = StyleSheet.create({
   gaveUpText: { fontSize: 14, color: UI_BODY_MUTED },
   win: { fontSize: 16, fontWeight: "600", color: UI_SUCCESS },
   lose: { fontSize: 16, fontWeight: "600", color: UI_DANGER },
+  gameOverCard: {
+    backgroundColor: "rgba(255,255,255,0.98)",
+    borderRadius: 16,
+    padding: 24,
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: UI_SUCCESS,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  gameOverCardLose: {
+    borderColor: UI_DANGER,
+  },
+  congratsText: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: UI_SUCCESS,
+    marginBottom: 6,
+  },
+  winnerNameText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: UI_PRIMARY,
+    marginBottom: 12,
+  },
+  gameOverStats: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: UI_BODY_MUTED,
+  },
+  loseTitleText: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: UI_DANGER,
+    marginBottom: 4,
+  },
   feedback: { fontSize: 16, fontWeight: "600", color: UI_BODY_MUTED },
   turnBarMenu: {
     borderTopWidth: 1,
@@ -109,7 +149,7 @@ const styles = StyleSheet.create({
   gameScroll: { flex: 1 },
   gameScrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 4,
     paddingBottom: 24,
   },
   gameScrollContentGrow: {
@@ -124,16 +164,16 @@ const styles = StyleSheet.create({
     backgroundColor: UI_PRIMARY,
     borderTopWidth: 2,
     borderTopColor: UI_PRIMARY,
-    paddingVertical: 8,
+    paddingVertical: 4,
     paddingHorizontal: 16,
     alignItems: "center",
   },
   bottomBarStatsContainer: {
     backgroundColor: "#000",
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 6,
-    marginBottom: 8,
+    marginBottom: 4,
     alignItems: "center",
     width: "100%",
   },
@@ -237,7 +277,7 @@ export default function GamePhase({
           styles.gameScrollContent,
           styles.gameScrollContentGrow,
           {
-            paddingTop: 8 + insets.top,
+            paddingTop: 4 + insets.top,
             minHeight: scrollContentMinHeight,
           },
         ]}
@@ -273,11 +313,23 @@ export default function GamePhase({
             <Text style={styles.gaveUpText}>You gave up — planes revealed</Text>
           ) : gameOver ? (
             playerWon === false ? (
-              <Text style={styles.lose}>You lost</Text>
+              <View
+                style={[
+                  styles.gameOverCard,
+                  styles.gameOverCardLose,
+                ]}
+              >
+                <Text style={styles.loseTitleText}>Game over</Text>
+                <Text style={styles.gameOverStats}>CPU wins</Text>
+              </View>
             ) : (
-              <Text style={styles.win}>
-                You win! Time: {formatTime(elapsed)} · Accuracy: {accuracy}%
-              </Text>
+              <View style={styles.gameOverCard}>
+                <Text style={styles.congratsText}>Congrats!</Text>
+                <Text style={styles.winnerNameText}>{name} wins!</Text>
+                <Text style={styles.gameOverStats}>
+                  Time: {formatTime(elapsed)} · Accuracy: {accuracy}%
+                </Text>
+              </View>
             )
           ) : null}
         </View>
@@ -357,7 +409,7 @@ export default function GamePhase({
         </View>
       )}
       {!gameOver && !gaveUp && (
-        <View style={[styles.bottomBar, { paddingBottom: 10 + insets.bottom }]}>
+        <View style={[styles.bottomBar, { paddingBottom: 6 + insets.bottom }]}>
           <View style={styles.bottomBarStatsContainer}>
             <Text style={styles.bottomBarStatsText}>
               Time: {formatTime(elapsed)} · Shots: {attackShots ?? shots} ·

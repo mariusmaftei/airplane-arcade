@@ -54,6 +54,26 @@ export const MAP_OPTIONS = [
     label: "Runway",
     image: require("../../assets/images/maps/airplane runway-map.jpeg"),
   },
+  {
+    id: "lost-sea",
+    label: "Lost sea",
+    image: require("../../assets/images/maps/lost-sea-map.png"),
+  },
+  {
+    id: "thunder-storm",
+    label: "Thunder storm",
+    image: require("../../assets/images/maps/thunder-storm-map.png"),
+  },
+  {
+    id: "tornado",
+    label: "Tornado",
+    image: require("../../assets/images/maps/tornado-map.png"),
+  },
+  {
+    id: "waterspout",
+    label: "Waterspout",
+    image: require("../../assets/images/maps/waterspout-map.png"),
+  },
 ];
 
 export const GRID_LINE_COLOR = "#a8d0e6";
@@ -90,3 +110,10 @@ export const CAROUSEL_VIEW_W =
 export const SLIDE_DURATION = 320;
 
 export const INTRO_IMAGE = require("../../assets/images/logo/aircraft-main.png");
+
+export const TAP_SOUND = require("../../assets/sounds/menus/button-menu-sound.mp3");
+export const WINNING_SOUND = require("../../assets/sounds/menus/winning-sound.mp3");
+
+const BATTLE_MUSIC_1 = require("../../assets/sounds/battle/battle-sound-1.mp3");
+const BATTLE_MUSIC_2 = require("../../assets/sounds/battle/battle-sound-2.mp3");
+export const BATTLE_MUSIC_TRACKS = [BATTLE_MUSIC_1, BATTLE_MUSIC_2];

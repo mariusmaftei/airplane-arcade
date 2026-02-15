@@ -1,25 +1,86 @@
 import { View, Text, StyleSheet, ImageBackground } from "react-native";
 import { UI_PRIMARY } from "../constants/constants";
 
+const STROKE_OFFSETS = [
+  { x: -1, y: 0 },
+  { x: 1, y: 0 },
+  { x: 0, y: -1 },
+  { x: 0, y: 1 },
+  { x: -1, y: -1 },
+  { x: -1, y: 1 },
+  { x: 1, y: -1 },
+  { x: 1, y: 1 },
+  { x: -2, y: 0 },
+  { x: 2, y: 0 },
+  { x: 0, y: -2 },
+  { x: 0, y: 2 },
+  { x: -2, y: -2 },
+  { x: -2, y: 2 },
+  { x: 2, y: -2 },
+  { x: 2, y: 2 },
+];
+
+function StrokeText({
+  children,
+  strokeColor = UI_PRIMARY,
+  fillColor = "#fff",
+  style,
+  numberOfLines,
+}) {
+  return (
+    <View style={styles.strokeWrap}>
+      {STROKE_OFFSETS.map((o, i) => (
+        <Text
+          key={i}
+          numberOfLines={numberOfLines}
+          style={[
+            style,
+            styles.strokeLayer,
+            {
+              color: strokeColor,
+              transform: [{ translateX: o.x }, { translateY: o.y }],
+            },
+          ]}
+        >
+          {children}
+        </Text>
+      ))}
+      <Text
+        numberOfLines={numberOfLines}
+        style={[style, styles.fillLayer, { color: fillColor }]}
+      >
+        {children}
+      </Text>
+    </View>
+  );
+}
+
 export default function VersusScreen({ leftName, rightName, mapImage }) {
   const content = (
     <View style={styles.whiteBox}>
       <View style={styles.row}>
-        <Text style={styles.name} numberOfLines={1}>
-          {leftName}
-        </Text>
-        <View style={styles.vsBadge}>
-          <Text style={styles.vsText}>VS</Text>
+        <View style={styles.nameSide}>
+          <StrokeText style={styles.name} numberOfLines={1}>
+            {leftName}
+          </StrokeText>
         </View>
-        <Text style={styles.name} numberOfLines={1}>
-          {rightName}
-        </Text>
+        <View style={styles.vsCenter} pointerEvents="none">
+          <StrokeText style={styles.vsText}>VS</StrokeText>
+        </View>
+        <View style={[styles.nameSide, styles.nameSideRight]}>
+          <StrokeText style={[styles.name, styles.nameRight]} numberOfLines={1}>
+            {rightName}
+          </StrokeText>
+        </View>
       </View>
     </View>
   );
   if (mapImage) {
     return (
-      <ImageBackground source={mapImage} style={styles.container}>
+      <ImageBackground
+        source={mapImage}
+        style={[styles.container, styles.containerWithMap]}
+      >
         {content}
       </ImageBackground>
     );
@@ -36,41 +97,66 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: UI_PRIMARY,
   },
+  containerWithMap: {
+    backgroundColor: "transparent",
+  },
   containerDefault: {
     backgroundColor: "transparent",
   },
   whiteBox: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: "transparent",
     paddingVertical: 20,
-    paddingHorizontal: 28,
-    marginHorizontal: 24,
+    paddingHorizontal: 24,
+    width: "100%",
+    flex: 1,
+    justifyContent: "center",
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
+    position: "relative",
+    width: "100%",
+  },
+  nameSide: {
+    flex: 1,
     justifyContent: "center",
-    gap: 20,
+    alignItems: "flex-start",
+    minWidth: 0,
+    paddingHorizontal: 12,
+  },
+  nameSideRight: {
+    alignItems: "flex-end",
   },
   name: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: "800",
-    color: "#000",
-    maxWidth: 120,
-    textAlign: "center",
   },
-  vsBadge: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#000",
-    backgroundColor: "rgba(0,0,0,0.08)",
+  nameRight: {
+    textAlign: "right",
+  },
+  vsCenter: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
   },
   vsText: {
-    fontSize: 18,
+    fontSize: 32,
     fontWeight: "800",
-    color: "#000",
-    letterSpacing: 2,
+    letterSpacing: 4,
+  },
+  strokeWrap: {
+    position: "relative",
+  },
+  strokeLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+  },
+  fillLayer: {
+    zIndex: 1,
   },
 });
