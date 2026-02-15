@@ -8,8 +8,9 @@ import {
 } from "react-native";
 import ExplosionEffect from "./ExplosionEffect";
 import SmokeEffect from "./SmokeEffect";
+import { UI_BODY, UI_INPUT_BORDER, UI_UNSELECTED_BG } from "../constants/constants";
 
-const AIM_IMAGE = require("../../assets/iamges/effects/aim.png");
+const AIM_IMAGE = require("../../assets/images/effects/aim.png");
 
 const MIN_CELL = 24;
 const MAX_CELL = 40;
@@ -139,7 +140,7 @@ export default function Grid({
             <ExplosionEffect size={cellSize} />
           ) : isSmoke ? (
             <SmokeEffect size={cellSize} />
-          ) : isHighlighted ? (
+          ) : isHighlighted && AIM_IMAGE ? (
             <Image
               source={AIM_IMAGE}
               style={[styles.aimImage, { width: cellSize, height: cellSize }]}
@@ -176,14 +177,14 @@ const styles = StyleSheet.create({
   },
   labelText: {
     fontWeight: "600",
-    color: "#333",
+    color: UI_BODY,
   },
   cell: {
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: UI_INPUT_BORDER,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#e0e8f0",
+    backgroundColor: UI_UNSELECTED_BG,
   },
   cellHit: { backgroundColor: "#e57373" },
   cellMiss: { backgroundColor: "#b0bec5" },

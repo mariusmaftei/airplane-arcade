@@ -6,22 +6,28 @@ import {
   StyleSheet,
   ScrollView,
   TouchableWithoutFeedback,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatTime } from "../utils/format";
 import Grid from "./Grid";
 import CoordPicker from "./CoordPicker";
 import OpponentBoardCarousel from "./OpponentBoardCarousel";
-
-const GREY = "rgba(67, 67, 67, 1)";
+import {
+  UI_PRIMARY,
+  UI_WHITE,
+  UI_SUCCESS,
+  UI_DANGER,
+  UI_BODY_MUTED,
+} from "../constants/constants";
 
 const styles = StyleSheet.create({
   turnBar: {
     marginBottom: 6,
     borderRadius: 8,
     borderWidth: 2,
-    borderColor: GREY,
-    backgroundColor: GREY,
+    borderColor: UI_PRIMARY,
+    backgroundColor: UI_PRIMARY,
     overflow: "hidden",
   },
   turnBarRow: {
@@ -45,16 +51,16 @@ const styles = StyleSheet.create({
     minHeight: 32,
     justifyContent: "center",
   },
-  turnBarFeedbackText: { fontSize: 14, fontWeight: "600", color: "#fff" },
-  turnBarText: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  turnBarCpu: { borderColor: GREY, backgroundColor: GREY },
-  turnBarCpuText: { color: "#fff" },
+  turnBarFeedbackText: { fontSize: 14, fontWeight: "600", color: UI_WHITE },
+  turnBarText: { fontSize: 15, fontWeight: "700", color: UI_WHITE },
+  turnBarCpu: { borderColor: UI_PRIMARY, backgroundColor: UI_PRIMARY },
+  turnBarCpuText: { color: UI_WHITE },
   burgerButton: {
     width: 34,
     height: 34,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#fff",
+    borderColor: UI_WHITE,
     justifyContent: "center",
     alignItems: "center",
     gap: 3,
@@ -63,13 +69,13 @@ const styles = StyleSheet.create({
     width: 14,
     height: 1.5,
     borderRadius: 1,
-    backgroundColor: "#fff",
+    backgroundColor: UI_WHITE,
   },
   feedbackSlot: { minHeight: 20, marginBottom: 4 },
-  gaveUpText: { fontSize: 14, color: GREY },
-  win: { fontSize: 16, fontWeight: "600", color: "#2e7d32" },
-  lose: { fontSize: 16, fontWeight: "600", color: "#c62828" },
-  feedback: { fontSize: 16, fontWeight: "600", color: GREY },
+  gaveUpText: { fontSize: 14, color: UI_BODY_MUTED },
+  win: { fontSize: 16, fontWeight: "600", color: UI_SUCCESS },
+  lose: { fontSize: 16, fontWeight: "600", color: UI_DANGER },
+  feedback: { fontSize: 16, fontWeight: "600", color: UI_BODY_MUTED },
   turnBarMenu: {
     borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.2)",
@@ -84,9 +90,9 @@ const styles = StyleSheet.create({
   menuItemText: {
     fontSize: 15,
     fontWeight: "600",
-    color: "#fff",
+    color: UI_WHITE,
   },
-  menuItemTextDanger: { color: "#c62828" },
+  menuItemTextDanger: { color: UI_DANGER },
   menuOverlayWrap: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -104,7 +110,10 @@ const styles = StyleSheet.create({
   gameScrollContent: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 24,
+  },
+  gameScrollContentGrow: {
+    flexGrow: 1,
   },
   carouselSlot: {
     minHeight: 140,
@@ -112,9 +121,9 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     width: "100%",
-    backgroundColor: GREY,
+    backgroundColor: UI_PRIMARY,
     borderTopWidth: 2,
-    borderTopColor: GREY,
+    borderTopColor: UI_PRIMARY,
     paddingVertical: 8,
     paddingHorizontal: 16,
     alignItems: "center",
@@ -131,7 +140,7 @@ const styles = StyleSheet.create({
   bottomBarStatsText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#2e7d32",
+    color: UI_SUCCESS,
   },
 });
 
@@ -179,8 +188,10 @@ export default function GamePhase({
   onPadTouchEnd,
 }) {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [menuOpen, setMenuOpen] = useState(false);
   const name = (playerName || "").trim() || "Player1";
+  const scrollContentMinHeight = windowHeight - 200;
 
   const feedbackText =
     lastResult === "miss"
@@ -224,9 +235,15 @@ export default function GamePhase({
         style={styles.gameScroll}
         contentContainerStyle={[
           styles.gameScrollContent,
-          { paddingTop: 8 + insets.top },
+          styles.gameScrollContentGrow,
+          {
+            paddingTop: 8 + insets.top,
+            minHeight: scrollContentMinHeight,
+          },
         ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={true}
+        bounces={true}
       >
         <View style={turnStyle}>
           <View style={styles.turnBarRow}>

@@ -8,12 +8,19 @@ import {
   Image,
 } from "react-native";
 import { colToLetter } from "../utils/format";
+import {
+  UI_BODY,
+  UI_BODY_MUTED,
+  UI_INPUT_BORDER,
+  UI_UNSELECTED_BG,
+  UI_WHITE,
+} from "../constants/constants";
 
 const STEP_PX = 16;
 const PAD_SIZE = 112;
 
-const SHOOT_BTN_UNPRESSED = require("../../assets/iamges/button-unpressed.png");
-const SHOOT_BTN_PRESSED = require("../../assets/iamges/button-pressed.png");
+const SHOOT_BTN_UNPRESSED = require("../../assets/images/menus/button-unpressed.png");
+const SHOOT_BTN_PRESSED = require("../../assets/images/menus/button-pressed.png");
 
 export default function CoordPicker({
   gridSize,
@@ -178,13 +185,13 @@ const styles = StyleSheet.create({
     width: PAD_SIZE,
     height: PAD_SIZE,
     borderWidth: 2,
-    borderColor: "#98a4ac",
+    borderColor: UI_INPUT_BORDER,
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#dce4e8",
+    backgroundColor: UI_UNSELECTED_BG,
   },
   swipePadDisabled: { opacity: 0.6 },
   coordDisplay: {
@@ -195,12 +202,12 @@ const styles = StyleSheet.create({
   coordLetter: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#333",
+    color: UI_BODY,
   },
   coordNumber: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#5a6a6e",
+    color: UI_BODY_MUTED,
   },
   confirmBtn: {
     width: 160,
@@ -211,6 +218,11 @@ const styles = StyleSheet.create({
   confirmBtnImage: {
     width: "100%",
     height: "100%",
+  },
+  confirmBtnText: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: UI_WHITE,
   },
   confirmBtnDisabled: { opacity: 0.5 },
 });

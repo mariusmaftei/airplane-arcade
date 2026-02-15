@@ -1,4 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useLayoutEffect,
+} from "react";
 import {
   StyleSheet,
   View,
@@ -13,6 +19,7 @@ import MathPaperBackground from "../components/MathPaperBackground";
 import IntroScreen from "./IntroScreen";
 import MainMenu from "../components/MainMenu";
 import PlacementPhase from "../components/PlacementPhase";
+import { DockDragShadow } from "../components/PlaneDock";
 import VersusScreen from "../components/VersusScreen";
 import GamePhase from "../components/GamePhase";
 import {
@@ -20,12 +27,13 @@ import {
   shoot,
   giveUp as giveUpApi,
   cpuShoot as cpuShootApi,
-} from "../api";
+} from "../services/game-services";
 import { PLANE_SHAPE, getShapeCells } from "../utils/planeShape";
-import { DIFFICULTIES, MAP_OPTIONS } from "../constants";
+import { DIFFICULTIES, MAP_OPTIONS, UI_PAGE_BG } from "../constants/constants";
 
 const HIT_SOUND = require("../../assets/sounds/Big Explosion Sound Effect - Lightning Editor.mp3");
 const MISS_SOUND = require("../../assets/sounds/Sound Effect - Missile Launch.mp3");
+const PLANE_COLORS = ["#5c6bc0", "#43a047", "#fb8c00"];
 
 export default function GameScreen() {
   const [showIntro, setShowIntro] = useState(true);
@@ -52,6 +60,11 @@ export default function GameScreen() {
   const [selectedPlaneIndex, setSelectedPlaneIndex] = useState(0);
   const [placementRotation, setPlacementRotation] = useState(0);
   const [previewAt, setPreviewAt] = useState(null);
+  const [movingPlaneIndex, setMovingPlaneIndex] = useState(null);
+  const [placementGridDragging, setPlacementGridDragging] = useState(false);
+  const [dockDragPosition, setDockDragPosition] = useState(null);
+  const [dockDragOverGrid, setDockDragOverGrid] = useState(false);
+  const placementGridContainerRef = useRef(null);
   const [selectedCol, setSelectedCol] = useState(0);
   const [selectedRow, setSelectedRow] = useState(0);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -72,8 +85,8 @@ export default function GameScreen() {
   const explosionTimeoutRef = useRef(null);
   const smokeTimeoutRef = useRef(null);
   const turnSwitchTimeoutRef = useRef(null);
-  const hitPlayer = useAudioPlayer(HIT_SOUND);
-  const missPlayer = useAudioPlayer(MISS_SOUND);
+  const hitPlayer = useAudioPlayer(HIT_SOUND, { shouldPlay: false });
+  const missPlayer = useAudioPlayer(MISS_SOUND, { shouldPlay: false });
 
   const difficultyConfig =
     DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
@@ -116,6 +129,21 @@ export default function GameScreen() {
         clearTimeout(turnSwitchTimeoutRef.current);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    if (!dockDragPosition) {
+      setDockDragOverGrid(false);
+      return;
+    }
+    const node = placementGridContainerRef.current;
+    if (!node) return;
+    node.measureInWindow((x, y, w, h) => {
+      const { pageX, pageY } = dockDragPosition;
+      const inside =
+        pageX >= x && pageX <= x + w && pageY >= y && pageY <= y + h;
+      setDockDragOverGrid(inside);
+    });
+  }, [dockDragPosition]);
 
   const startNewGame = useCallback(async () => {
     setLoading(true);
@@ -172,10 +200,12 @@ export default function GameScreen() {
         id: selectedPlaneIndex + 1,
         cells,
         head: cells[0],
+        rotation: placementRotation,
       };
       return next;
     });
     setPreviewAt(null);
+    setMovingPlaneIndex(null);
     setSelectedPlaneIndex((i) => Math.min(i + 1, placementNumPlanes - 1));
   }, [
     previewAt,
@@ -192,7 +222,28 @@ export default function GameScreen() {
       return next;
     });
     setPreviewAt(null);
+    setMovingPlaneIndex(null);
   }, [selectedPlaneIndex]);
+
+  const handleStartMovePlane = useCallback(
+    (planeIndex, headRow, headCol) => {
+      setMovingPlaneIndex(planeIndex);
+      setSelectedPlaneIndex(planeIndex);
+      setPreviewAt({ row: headRow, col: headCol });
+      setPlacementRotation(() => placedPlanes[planeIndex]?.rotation ?? 0);
+    },
+    [placedPlanes],
+  );
+
+  const handleEndMovePlane = useCallback(() => {
+    if (movingPlaneIndex == null) return;
+    if (previewAt && placementPreviewValid) {
+      handleConfirmPlace();
+    } else {
+      setPreviewAt(null);
+    }
+    setMovingPlaneIndex(null);
+  }, [movingPlaneIndex, previewAt, placementPreviewValid, handleConfirmPlace]);
 
   const startGameFromPlacement = useCallback(async () => {
     const planes = placedPlanes
@@ -328,8 +379,12 @@ export default function GameScreen() {
         } else if (res.result === "sunk") Vibration.vibrate(100);
         else if (res.result === "hit") Vibration.vibrate(50);
         if (res.result === "hit" || res.result === "sunk") {
-          hitPlayer.seekTo(0);
-          hitPlayer.play();
+          try {
+            hitPlayer.seekTo(0);
+            hitPlayer.play();
+          } catch (e) {
+            console.warn("Hit sound play failed:", e);
+          }
           setExplodingCell({ row, col });
           if (explosionTimeoutRef.current)
             clearTimeout(explosionTimeoutRef.current);
@@ -338,8 +393,12 @@ export default function GameScreen() {
             500,
           );
         } else if (res.result === "miss") {
-          missPlayer.seekTo(0);
-          missPlayer.play();
+          try {
+            missPlayer.seekTo(0);
+            missPlayer.play();
+          } catch (e) {
+            console.warn("Miss sound play failed:", e);
+          }
           setSmokeCell({ row, col });
           if (smokeTimeoutRef.current) clearTimeout(smokeTimeoutRef.current);
           smokeTimeoutRef.current = setTimeout(() => setSmokeCell(null), 800);
@@ -418,14 +477,22 @@ export default function GameScreen() {
           setIsPlayerTurn(res.isPlayerTurn ?? true);
         }
         if (res.result === "hit" || res.result === "sunk") {
-          hitPlayer.seekTo(0);
-          hitPlayer.play();
+          try {
+            hitPlayer.seekTo(0);
+            hitPlayer.play();
+          } catch (e) {
+            console.warn("Hit sound play failed:", e);
+          }
           if (res.cell)
             setExplodingCell({ row: res.cell.row, col: res.cell.col });
           setTimeout(() => setExplodingCell(null), 500);
         } else if (res.result === "miss" && res.cell) {
-          missPlayer.seekTo(0);
-          missPlayer.play();
+          try {
+            missPlayer.seekTo(0);
+            missPlayer.play();
+          } catch (e) {
+            console.warn("Miss sound play failed:", e);
+          }
           setSmokeCell({ row: res.cell.row, col: res.cell.col });
           setTimeout(() => setSmokeCell(null), 800);
         }
@@ -452,13 +519,17 @@ export default function GameScreen() {
     missPlayer,
   ]);
 
+  const effectivePlacementRotation =
+    movingPlaneIndex != null
+      ? placedPlanes[movingPlaneIndex]?.rotation ?? 0
+      : placementRotation;
   const placementPreviewCells =
     previewAt &&
     getShapeCells(
       PLANE_SHAPE,
       previewAt.row,
       previewAt.col,
-      placementRotation,
+      effectivePlacementRotation,
       placementGridSize,
     );
   const placementPreviewValid =
@@ -521,35 +592,57 @@ export default function GameScreen() {
         />
       )}
       {placementPhase ? (
-        <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingTop: 20 + insets.top,
-              paddingBottom: 40 + insets.bottom,
-            },
-          ]}
-          keyboardShouldPersistTaps="handled"
-        >
-          <PlacementPhase
-            selectedPlaneIndex={selectedPlaneIndex}
-            onSelectPlane={setSelectedPlaneIndex}
-            placedPlanes={placedPlanes}
-            placementRotation={placementRotation}
-            onRotate={() => setPlacementRotation((r) => (r + 1) % 4)}
-            onClearPlane={handleClearPlane}
-            previewAt={previewAt}
-            onPreviewChange={setPreviewAt}
-            onConfirmPlace={handleConfirmPlace}
-            placementGridSize={placementGridSize}
-            placementPreviewCells={placementPreviewCells}
-            placementPreviewValid={placementPreviewValid}
-            allPlaced={allPlaced}
-            onBack={() => setPlacementPhase(false)}
-            onStartGame={startGameFromPlacement}
-            loading={loading}
-          />
-        </ScrollView>
+        <>
+          <ScrollView
+            scrollEnabled={!placementGridDragging}
+            contentContainerStyle={[
+              styles.scroll,
+              {
+                paddingTop: 20 + insets.top,
+                paddingBottom: 40 + insets.bottom,
+              },
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <PlacementPhase
+              selectedPlaneIndex={selectedPlaneIndex}
+              onSelectPlane={setSelectedPlaneIndex}
+              placedPlanes={placedPlanes}
+              placementRotation={placementRotation}
+              onRotate={() => setPlacementRotation((r) => (r + 1) % 4)}
+              onClearPlane={handleClearPlane}
+              previewAt={previewAt}
+              onPreviewChange={setPreviewAt}
+              onConfirmPlace={handleConfirmPlace}
+              onStartMovePlane={handleStartMovePlane}
+              onDragEnd={handleEndMovePlane}
+              onDragActiveChange={setPlacementGridDragging}
+              onDockDragPosition={setDockDragPosition}
+              dockDragPosition={dockDragPosition}
+              placementGridContainerRef={placementGridContainerRef}
+              movingPlaneIndex={movingPlaneIndex}
+              placementGridSize={placementGridSize}
+              placementPreviewCells={placementPreviewCells}
+              placementPreviewValid={placementPreviewValid}
+              allPlaced={allPlaced}
+              onBack={() => setPlacementPhase(false)}
+              onStartGame={startGameFromPlacement}
+              loading={loading}
+            />
+          </ScrollView>
+          {dockDragPosition && !dockDragOverGrid && (
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <DockDragShadow
+                pageX={dockDragPosition.pageX}
+                pageY={dockDragPosition.pageY}
+                rotation={placementRotation}
+                planeColor={
+                  PLANE_COLORS[selectedPlaneIndex % PLANE_COLORS.length]
+                }
+              />
+            </View>
+          )}
+        </>
       ) : !gameId ? (
         <ScrollView
           contentContainerStyle={[
@@ -664,7 +757,7 @@ export default function GameScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#faf8f5" },
+  container: { flex: 1, backgroundColor: UI_PAGE_BG },
   containerOverMap: { backgroundColor: "transparent" },
   scroll: { paddingHorizontal: 20, alignItems: "center" },
   gameView: { flex: 1 },

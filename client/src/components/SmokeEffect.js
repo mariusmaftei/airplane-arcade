@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { View, Image, StyleSheet } from "react-native";
 
 const FRAMES = [
-  require("../../assets/iamges/effects/smoke-1.png"),
-  require("../../assets/iamges/effects/smoke-2.png"),
-  require("../../assets/iamges/effects/smoke-3.png"),
-  require("../../assets/iamges/effects/smoke-4.png"),
-  require("../../assets/iamges/effects/smoke-5.png"),
+  require("../../assets/images/effects/smoke-1.png"),
+  require("../../assets/images/effects/smoke-2.png"),
+  require("../../assets/images/effects/smoke-3.png"),
+  require("../../assets/images/effects/smoke-4.png"),
+  require("../../assets/images/effects/smoke-5.png"),
 ];
 
 const FRAME_MS = 100;

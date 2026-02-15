@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 import { View, Image, StyleSheet } from "react-native";
 
 const FRAMES = [
-  require("../../assets/iamges/effects/explosion-1.png"),
-  require("../../assets/iamges/effects/explosion-2.png"),
-  require("../../assets/iamges/effects/explosion-3.png"),
-  require("../../assets/iamges/effects/explosion-4.png"),
-  require("../../assets/iamges/effects/explosion-5.png"),
+  require("../../assets/images/effects/explosion-1.png"),
+  require("../../assets/images/effects/explosion-2.png"),
+  require("../../assets/images/effects/explosion-3.png"),
+  require("../../assets/images/effects/explosion-4.png"),
+  require("../../assets/images/effects/explosion-5.png"),
 ];
 
 const FRAME_MS = 80;

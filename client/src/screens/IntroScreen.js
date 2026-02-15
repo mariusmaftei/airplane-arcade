@@ -1,7 +1,14 @@
 import { StyleSheet, View, Text, Pressable, Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { INTRO_IMAGE } from "../constants";
+import {
+  INTRO_IMAGE,
+  UI_PRIMARY,
+  UI_WHITE,
+  UI_BODY,
+  UI_BODY_MUTED,
+  UI_PAGE_BG,
+} from "../constants/constants";
 
 export default function IntroScreen({ onBegin }) {
   const insets = useSafeAreaInsets();
@@ -19,7 +26,9 @@ export default function IntroScreen({ onBegin }) {
     >
       <StatusBar style="dark" />
       <View style={styles.content}>
-        <Image source={INTRO_IMAGE} style={styles.image} resizeMode="contain" />
+        {INTRO_IMAGE && (
+          <Image source={INTRO_IMAGE} style={styles.image} resizeMode="contain" />
+        )}
         <Text style={styles.title}>Airplane Arcade</Text>
         <Text style={styles.tagline}>Find and destroy the hidden planes</Text>
         <Pressable
@@ -39,7 +48,7 @@ export default function IntroScreen({ onBegin }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#faf8f5",
+    backgroundColor: UI_PAGE_BG,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -57,7 +66,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 34,
     fontWeight: "800",
-    color: "#2c2c2c",
+    color: UI_BODY,
     letterSpacing: 1,
     textAlign: "center",
     marginBottom: 8,
@@ -67,12 +76,12 @@ const styles = StyleSheet.create({
   },
   tagline: {
     fontSize: 15,
-    color: "#555",
+    color: UI_BODY_MUTED,
     marginBottom: 40,
     textAlign: "center",
   },
   button: {
-    backgroundColor: "rgba(67, 67, 67, 1)",
+    backgroundColor: UI_PRIMARY,
     paddingVertical: 16,
     paddingHorizontal: 48,
     borderRadius: 14,
@@ -91,7 +100,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   buttonText: {
-    color: "#fff",
+    color: UI_WHITE,
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: 0.5,

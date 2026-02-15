@@ -1,6 +1,5 @@
 import { View, Text, StyleSheet, ImageBackground } from "react-native";
-
-const GREY = "rgba(67, 67, 67, 1)";
+import { UI_PRIMARY } from "../constants/constants";
 
 export default function VersusScreen({ leftName, rightName, mapImage }) {
   const content = (
@@ -35,7 +34,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: GREY,
+    backgroundColor: UI_PRIMARY,
   },
   containerDefault: {
     backgroundColor: "transparent",

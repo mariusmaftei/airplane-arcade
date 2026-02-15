@@ -68,7 +68,7 @@ app.post("/game/:id/shoot", (req, res) => {
   if (!state) return res.status(404).json({ error: "Game not found" });
   if (!store.canShoot(req.params.id)) {
     const waitSec = Math.ceil(
-      store.getCooldownRemainingMs(req.params.id) / 1000,
+      store.getCooldownRemainingMs(req.params.id) / 1000
     );
     res.set("Retry-After", String(waitSec));
     return res.status(429).json({
@@ -154,6 +154,25 @@ function handleGiveUp(req, res) {
 app.get("/game/:id/give-up", handleGiveUp);
 app.post("/game/:id/give-up", handleGiveUp);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(
+    `Accessible at http://localhost:${PORT} or http://10.0.2.2:${PORT} (Android emulator)`
+  );
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(
+      `\n❌ Port ${PORT} is already in use!\n` +
+        `Please kill the process using port ${PORT} or use a different port.\n` +
+        `To find the process: netstat -ano | findstr :${PORT}\n` +
+        `To kill it: taskkill /PID <PID> /F (may need admin)\n` +
+        `Or set PORT environment variable to use a different port.\n`
+    );
+    process.exit(1);
+  } else {
+    console.error("Server error:", err);
+    process.exit(1);
+  }
 });

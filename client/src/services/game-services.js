@@ -1,9 +1,10 @@
-import { API_BASE_URL } from "./config";
+import { API_BASE_URL } from "./api";
 
 const REQUEST_TIMEOUT_MS = 15000;
 
 async function request(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
+  console.log(`[API] Requesting: ${url}`);
   const { body, ...rest } = options;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -17,20 +18,23 @@ async function request(path, options = {}) {
     });
   } catch (e) {
     clearTimeout(timeoutId);
+    console.error(`[API] Request failed: ${url}`, e);
     if (e.name === "AbortError")
       throw new Error(
-        "Server not responding. Check that the server is running and the URL is correct.",
+        `Server not responding at ${url}. Check that the server is running and the URL is correct.`,
       );
     throw new Error(e.message || "Network error");
   }
   clearTimeout(timeoutId);
   const data = res.ok ? await res.json().catch(() => ({})) : null;
   if (!res.ok) {
+    console.error(`[API] HTTP ${res.status} from ${url}:`, data);
     const err = new Error(data?.error || `HTTP ${res.status}`);
     err.status = res.status;
     err.data = data;
     throw err;
   }
+  console.log(`[API] Success: ${url}`);
   return data;
 }
 

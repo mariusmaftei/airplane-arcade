@@ -1,4 +1,5 @@
 import { StyleSheet, View, Text, ScrollView } from "react-native";
+import { UI_BODY, UI_INPUT_BORDER, UI_UNSELECTED_BG } from "../constants/constants";
 
 const MINI_CELL = 8;
 
@@ -16,7 +17,7 @@ function MiniBoard({ gridSize, hits, misses, revealedCells, label }) {
     const cells = [];
     for (let c = 0; c < gridSize; c++) {
       const state = getCellState(hits, misses, revealedCells, r, c);
-      let bg = "#e0e8f0";
+      let bg = UI_UNSELECTED_BG;
       if (state === "hit") bg = "#e57373";
       else if (state === "miss") bg = "#b0bec5";
       else if (state === "revealed") bg = "#90a4ae";
@@ -100,10 +101,10 @@ const styles = StyleSheet.create({
   wrap: { marginTop: 12, marginBottom: 8 },
   scrollContent: { paddingHorizontal: 4 },
   card: {
-    backgroundColor: "#f5f5f5",
+    backgroundColor: UI_UNSELECTED_BG,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: UI_INPUT_BORDER,
     padding: 8,
     alignItems: "center",
     marginRight: 12,
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#333",
+    color: UI_BODY,
     marginBottom: 6,
   },
   miniGrid: {},

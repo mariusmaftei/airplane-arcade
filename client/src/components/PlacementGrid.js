@@ -7,15 +7,24 @@ import {
   PanResponder,
 } from "react-native";
 import { useMemo } from "react";
+import {
+  UI_BODY,
+  UI_INPUT_BORDER,
+  UI_UNSELECTED_BG,
+  UI_SUCCESS,
+  UI_DANGER,
+  UI_WHITE,
+} from "../constants/constants";
 
 const MIN_CELL = 24;
 const MAX_CELL = 40;
 const HORIZONTAL_PADDING = 32;
-const LABEL_WIDTH = 20;
+export const PLACEMENT_LABEL_WIDTH = 20;
+const LABEL_WIDTH = PLACEMENT_LABEL_WIDTH;
 
-function getCellSize(gridSize) {
+export function getPlacementCellSize(gridSize) {
   const { width } = Dimensions.get("window");
-  const maxGrid = width - HORIZONTAL_PADDING * 2 - LABEL_WIDTH;
+  const maxGrid = width - HORIZONTAL_PADDING * 2 - PLACEMENT_LABEL_WIDTH;
   const size = Math.floor(maxGrid / gridSize);
   return Math.min(MAX_CELL, Math.max(MIN_CELL, size));
 }
@@ -30,11 +39,19 @@ function colToLetter(col) {
   return s;
 }
 
-function getCellPlacementState(placedPlanes, previewCells, row, col) {
+function getCellPlacementState(
+  placedPlanes,
+  previewCells,
+  row,
+  col,
+  movingPlaneIndex,
+) {
   for (let i = 0; i < placedPlanes.length; i++) {
     const p = placedPlanes[i];
-    if (p?.cells?.some((c) => c.row === row && c.col === col))
+    if (p?.cells?.some((c) => c.row === row && c.col === col)) {
+      if (i === movingPlaneIndex) return { type: "preview" };
       return { type: "plane", index: i };
+    }
   }
   if (previewCells?.some((c) => c.row === row && c.col === col))
     return { type: "preview" };
@@ -50,14 +67,22 @@ function coordsToCell(locationX, locationY, cellSize, labelWidth, gridSize) {
   return { row, col };
 }
 
+function getCellSize(gridSize) {
+  return getPlacementCellSize(gridSize);
+}
+
 export default function PlacementGrid({
   gridSize,
   placedPlanes = [],
   previewCells = null,
   previewValid = false,
+  movingPlaneIndex = null,
   onCellPress,
   onDragStart,
   onDragMove,
+  onStartMovePlane,
+  onDragEnd,
+  onDragActiveChange,
   mapBackground = false,
 }) {
   const cellSize = getCellSize(gridSize);
@@ -89,16 +114,49 @@ export default function PlacementGrid({
         },
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (_, evt) => {
+          if (onDragActiveChange) onDragActiveChange(true);
           const cell = getCellFromEvent(evt);
-          if (cell && onDragStart) onDragStart(cell.row, cell.col);
+          if (!cell) return;
+          const state = getCellPlacementState(
+            placedPlanes,
+            previewCells,
+            cell.row,
+            cell.col,
+            movingPlaneIndex,
+          );
+          if (state.type === "plane" && onStartMovePlane) {
+            const plane = placedPlanes[state.index];
+            if (plane?.head)
+              onStartMovePlane(state.index, plane.head.row, plane.head.col);
+          } else if (onDragStart) {
+            onDragStart(cell.row, cell.col);
+          }
         },
         onPanResponderMove: (_, evt) => {
           const cell = getCellFromEvent(evt);
           if (cell && onDragMove) onDragMove(cell.row, cell.col);
         },
-        onPanResponderRelease: () => {},
+        onPanResponderRelease: () => {
+          if (onDragEnd) onDragEnd();
+          if (onDragActiveChange) onDragActiveChange(false);
+        },
+        onPanResponderTerminate: () => {
+          if (onDragEnd) onDragEnd();
+          if (onDragActiveChange) onDragActiveChange(false);
+        },
       }),
-    [gridSize, cellSize, onDragStart, onDragMove],
+    [
+      gridSize,
+      cellSize,
+      placedPlanes,
+      previewCells,
+      movingPlaneIndex,
+      onDragStart,
+      onDragMove,
+      onStartMovePlane,
+      onDragEnd,
+      onDragActiveChange,
+    ],
   );
 
   const headerRow = (
@@ -133,7 +191,13 @@ export default function PlacementGrid({
       </View>,
     );
     for (let c = 0; c < gridSize; c++) {
-      const state = getCellPlacementState(placedPlanes, previewCells, r, c);
+      const state = getCellPlacementState(
+        placedPlanes,
+        previewCells,
+        r,
+        c,
+        movingPlaneIndex,
+      );
       let cellStyle = [styles.cell, { width: cellSize, height: cellSize }];
       if (state.type === "plane")
         cellStyle.push({
@@ -168,11 +232,10 @@ export default function PlacementGrid({
       </View>,
     );
   }
+  const hasDrag =
+    onDragStart || onDragMove || onStartMovePlane || onDragActiveChange;
   return (
-    <View
-      style={styles.grid}
-      {...(onDragStart || onDragMove ? panResponder.panHandlers : {})}
-    >
+    <View style={styles.grid} {...(hasDrag ? panResponder.panHandlers : {})}>
       {rows}
     </View>
   );
@@ -185,23 +248,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  labelText: { fontWeight: "600", color: "#333" },
+  labelText: { fontWeight: "600", color: UI_BODY },
   cell: {
     borderWidth: 1,
-    borderColor: "#333",
+    borderColor: UI_INPUT_BORDER,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#e0e8f0",
+    backgroundColor: UI_UNSELECTED_BG,
   },
   cellOverMap: { backgroundColor: "rgba(255,255,255,0.15)" },
   cellPreviewValid: {
     backgroundColor: "rgba(46, 125, 50, 0.7)",
-    borderColor: "#2e7d32",
+    borderColor: UI_SUCCESS,
   },
   cellPreviewInvalid: {
     backgroundColor: "rgba(211, 47, 47, 0.7)",
-    borderColor: "#c62828",
+    borderColor: UI_DANGER,
   },
   cellText: {},
-  cellTextFilled: { color: "#fff" },
+  cellTextFilled: { color: UI_WHITE },
 });

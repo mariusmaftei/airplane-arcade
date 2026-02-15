@@ -1,6 +1,6 @@
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { getCellSize } from "./Grid";
-import { MATH_PAPER_BG, GRID_LINE_COLOR } from "../constants";
+import { MATH_PAPER_BG, GRID_LINE_COLOR } from "../constants/constants";
 
 export default function MathPaperBackground({ gridSize }) {
   const { width, height } = useWindowDimensions();

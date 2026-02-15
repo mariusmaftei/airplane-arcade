@@ -1,4 +1,0 @@
-      WING      TAIL
-
-HEAD BODY BODY BODY
-WING TAIL

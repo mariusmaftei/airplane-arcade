@@ -19,7 +19,13 @@ import {
   CAROUSEL_STEP,
   CAROUSEL_VIEW_W,
   SLIDE_DURATION,
-} from "../constants";
+  MATH_PAPER_BG,
+  GRID_LINE_COLOR,
+  UI_PRIMARY,
+  UI_PRIMARY_LIGHT,
+  UI_WHITE,
+  UI_BODY_MUTED,
+} from "../constants/constants";
 
 const CAROUSEL_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
 const CAROUSEL_VIEW_CENTER = CAROUSEL_VIEW_W / 2;
@@ -44,9 +50,9 @@ export default function MapCarousel({
       easing: CAROUSEL_EASING,
       useNativeDriver: true,
     }).start(() => {
-      onSelect(prevId);
       carouselSlide.setValue(CAROUSEL_REST_X);
       carouselAnimating.current = false;
+      requestAnimationFrame(() => onSelect(prevId));
     });
   }, [selectedId, mapOptions, onSelect, carouselSlide]);
 
@@ -62,9 +68,9 @@ export default function MapCarousel({
       easing: CAROUSEL_EASING,
       useNativeDriver: true,
     }).start(() => {
-      onSelect(nextId);
       carouselSlide.setValue(CAROUSEL_REST_X);
       carouselAnimating.current = false;
+      requestAnimationFrame(() => onSelect(nextId));
     });
   }, [selectedId, mapOptions, onSelect, carouselSlide]);
 
@@ -169,8 +175,42 @@ export default function MapCarousel({
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={styles.thumbDefault}>
-                      <Text style={styles.thumbDefaultText}>Default</Text>
+                    <View
+                      style={[
+                        styles.thumbMathPaper,
+                        {
+                          width: itemWidths[i],
+                          height: itemHeights[i],
+                        },
+                      ]}
+                    >
+                      {Array.from({ length: 16 }, (_, k) => (
+                        <View
+                          key={`v-${k}`}
+                          style={[
+                            styles.mathPaperLine,
+                            styles.mathPaperLineV,
+                            {
+                              left: k * 6,
+                              height: itemHeights[i],
+                            },
+                          ]}
+                        />
+                      ))}
+                      {Array.from({ length: 14 }, (_, k) => (
+                        <View
+                          key={`h-${k}`}
+                          style={[
+                            styles.mathPaperLine,
+                            styles.mathPaperLineH,
+                            {
+                              top: k * 6,
+                              width: itemWidths[i],
+                            },
+                          ]}
+                        />
+                      ))}
+                      <Text style={styles.thumbMathPaperText}>Math paper</Text>
                     </View>
                   )}
                 </Pressable>
@@ -204,26 +244,23 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#fff",
+    backgroundColor: UI_PRIMARY,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: "rgba(67, 67, 67, 1)",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.15,
     shadowRadius: 6,
     elevation: 4,
   },
   arrowBtnPressed: {
-    backgroundColor: "rgba(67, 67, 67, 0.15)",
-    borderColor: "rgba(67, 67, 67, 1)",
+    backgroundColor: UI_PRIMARY_LIGHT,
     transform: [{ scale: 0.96 }],
   },
   arrowText: {
     fontSize: 28,
-    color: "rgba(67, 67, 67, 1)",
-    fontWeight: "600",
+    color: UI_WHITE,
+    fontWeight: "700",
     includeFontPadding: false,
   },
   window: {
@@ -241,12 +278,25 @@ const styles = StyleSheet.create({
   },
   item: { borderRadius: 6, overflow: "hidden" },
   thumb: { width: "100%", height: "100%" },
-  thumbDefault: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#e0e0e0",
+  thumbMathPaper: {
+    backgroundColor: MATH_PAPER_BG,
     justifyContent: "center",
     alignItems: "center",
   },
-  thumbDefaultText: { fontSize: 10, color: "#666", fontWeight: "600" },
+  mathPaperLine: {
+    position: "absolute",
+    backgroundColor: GRID_LINE_COLOR,
+  },
+  mathPaperLineV: {
+    width: 1,
+  },
+  mathPaperLineH: {
+    height: 1,
+  },
+  thumbMathPaperText: {
+    fontSize: 10,
+    color: UI_BODY_MUTED,
+    fontWeight: "700",
+    zIndex: 1,
+  },
 });
