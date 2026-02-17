@@ -12,6 +12,7 @@ import PlacementGrid from "./PlacementGrid";
 import {
   getPlacementCellSize,
   PLACEMENT_LABEL_WIDTH,
+  PLACEMENT_WIDTH_RATIO,
 } from "./PlacementGrid";
 import PlaneDock from "./PlaneDock";
 import {
@@ -32,6 +33,7 @@ export default function PlacementPhase({
   placementRotation,
   onRotate,
   onClearPlane,
+  onClearAll,
   previewAt,
   onPreviewChange,
   onConfirmPlace,
@@ -49,6 +51,7 @@ export default function PlacementPhase({
   allPlaced,
   onBack,
   onStartGame,
+  onRandomPlace,
   loading,
   startButtonLabel = "Start game",
 }) {
@@ -59,9 +62,13 @@ export default function PlacementPhase({
   const currentPlanePlaced = placedPlanes[selectedPlaneIndex];
   const placedCount = placedPlanes.filter(Boolean).length;
   const totalPlanes = placedPlanes.length;
-  const boardCellSize = getPlacementCellSize(placementGridSize);
+  const boardCellSize = getPlacementCellSize(
+    placementGridSize,
+    PLACEMENT_WIDTH_RATIO,
+  );
   const gridWidth = placementGridSize * boardCellSize;
   const boardWidth = PLACEMENT_LABEL_WIDTH + gridWidth;
+  const dockCardWidth = 112;
 
   const checkTouchOnDockPlane = useCallback((pageX, pageY) => {
     return new Promise((resolve) => {
@@ -71,10 +78,7 @@ export default function PlacementPhase({
       }
       dockPlaneRef.current.measureInWindow((x, y, w, h) => {
         const inside =
-          pageX >= x &&
-          pageX <= x + w &&
-          pageY >= y &&
-          pageY <= y + h;
+          pageX >= x && pageX <= x + w && pageY >= y && pageY <= y + h;
         resolve(inside);
       });
     });
@@ -123,12 +127,13 @@ export default function PlacementPhase({
             px >= gx && px <= gx + gw && py >= gy && py <= gy + gh;
           let dropCell = null;
           if (wasOverGrid) {
-            const cellSize = getPlacementCellSize(placementGridSize);
+            const cellSize = getPlacementCellSize(
+              placementGridSize,
+              PLACEMENT_WIDTH_RATIO,
+            );
             const localX = px - gx;
             const localY = py - gy;
-            const col = Math.floor(
-              (localX - PLACEMENT_LABEL_WIDTH) / cellSize,
-            );
+            const col = Math.floor((localX - PLACEMENT_LABEL_WIDTH) / cellSize);
             const row = Math.floor((localY - cellSize) / cellSize);
             if (
               row >= 0 &&
@@ -147,6 +152,7 @@ export default function PlacementPhase({
     },
     [
       placementGridSize,
+      PLACEMENT_WIDTH_RATIO,
       checkTouchOnDockPlane,
       reportPosition,
       onDragActiveChange,
@@ -168,16 +174,36 @@ export default function PlacementPhase({
     [reportPosition],
   );
 
+  const showConfirm = !!previewAt && placementPreviewValid && !allPlaced;
+  const footerPrimaryLabel = allPlaced ? startButtonLabel : "Confirm";
+  const footerPrimaryOnPress = allPlaced
+    ? onStartGame
+    : () =>
+        onConfirmPlace({
+          at: previewAt,
+          planeIndex: selectedPlaneIndex,
+          rotation: placementRotation,
+        });
+
   return (
     <View style={styles.page}>
+      <SoundPressable
+        style={({ pressed }) => [
+          styles.backButton,
+          pressed && styles.backButtonPressed,
+        ]}
+        onPress={onBack}
+      >
+        <Text style={styles.backButtonText}>← Back</Text>
+      </SoundPressable>
       <View style={styles.topBar}>
-          <Text style={styles.title}>Place planes</Text>
-          <Text style={styles.step}>
-            {placedCount}/{totalPlanes} placed
-          </Text>
-        </View>
+        <Text style={styles.title}>Place planes</Text>
+        <Text style={styles.step}>
+          {placedCount}/{totalPlanes} placed
+        </Text>
+      </View>
 
-        <View style={styles.tabs}>
+      <View style={styles.tabs}>
         {placedPlanes.map((p, i) => (
           <SoundPressable
             key={i}
@@ -217,96 +243,94 @@ export default function PlacementPhase({
         onHandlerStateChange={handleDockGestureState}
         onGestureEvent={handleDockGesture}
       >
-        <View style={[styles.dockAndBoardWrap]}>
-      <View
-        style={[styles.toolCard, { width: boardWidth, alignSelf: "center" }]}
-      >
-        <PlaneDock
-          placementRotation={placementRotation}
-          placementGridSize={placementGridSize}
-          gridWidth={gridWidth}
-          boardWidth={boardWidth}
-          gridContainerRef={gridContainerRef}
-          dockPlaneRef={dockPlaneRef}
-          placedPlanes={placedPlanes}
-          selectedPlaneIndex={selectedPlaneIndex}
-          hasActivePreview={!!previewAt && movingPlaneIndex == null}
-          onPreviewChange={onPreviewChange}
-          onDragActiveChange={onDragActiveChange}
-          onDockDragPosition={onDockDragPosition}
-          onDockDragEnd={onDockDragEnd}
-          draggingPlaneIndex={dockDragPosition?.planeIndex ?? null}
-          planeColors={PLANE_COLORS}
-        />
-        <View style={styles.toolActions}>
-          <SoundPressable
-            style={({ pressed }) => [
-              styles.actionBtn,
-              previewAt && styles.actionBtnDisabled,
-              pressed && styles.actionBtnPressed,
-            ]}
-            onPress={onRotate}
-            disabled={!!previewAt}
-          >
-            <Text style={styles.actionBtnText}>↻ Rotate</Text>
-          </SoundPressable>
-          <SoundPressable
-            style={({ pressed }) => [
-              styles.actionBtn,
-              !currentPlanePlaced && !previewAt && styles.actionBtnDisabled,
-              pressed && styles.actionBtnPressed,
-            ]}
-            onPress={onClearPlane}
-            disabled={!currentPlanePlaced && !previewAt}
-          >
-            <Text style={styles.actionBtnText}>Clear</Text>
-          </SoundPressable>
-          <SoundPressable
-            style={({ pressed }) => [
-              styles.actionBtn,
-              styles.actionBtnPrimary,
-              (!previewAt || !placementPreviewValid) &&
-                styles.actionBtnDisabled,
-              pressed && styles.actionBtnPressed,
-            ]}
-            onPress={() =>
-              previewAt &&
-              placementPreviewValid &&
-              onConfirmPlace({
-                at: previewAt,
-                planeIndex: selectedPlaneIndex,
-                rotation: placementRotation,
-              })
-            }
-            disabled={!previewAt || !placementPreviewValid}
-          >
-            <Text style={styles.actionBtnTextPrimary}>Confirm</Text>
-          </SoundPressable>
-        </View>
-      </View>
-
-      <View
-        ref={gridContainerRef}
-        collapsable={false}
-        style={[styles.boardWrap, { width: boardWidth, alignSelf: "center" }]}
-      >
-        <PlacementGrid
-          gridSize={placementGridSize}
-          placedPlanes={placedPlanes}
-          previewCells={placementPreviewCells}
-          previewValid={placementPreviewValid}
-          movingPlaneIndex={movingPlaneIndex}
-          gridContainerRef={gridContainerRef}
-          dockDragging={!!dockDragPosition}
-          onCellPress={(row, col) => onPreviewChange({ row, col })}
-          onDragStart={(row, col) => onPreviewChange({ row, col })}
-          onDragMove={(row, col) => onPreviewChange({ row, col })}
-          onStartMovePlane={onStartMovePlane}
-          onDragEnd={onDragEnd}
-          onDragActiveChange={onDragActiveChange}
-          mapBackground={false}
-        />
-      </View>
+        <View style={styles.boardDockCenter}>
+          <View style={styles.hintContainer}>
+            <Text style={styles.boardHint}>
+              {!!previewAt && movingPlaneIndex == null
+                ? "Adjust position on board, then press Confirm"
+                : !currentPlanePlaced
+                  ? `Plane ${selectedPlaneIndex + 1} — drag onto board`
+                  : `Plane ${selectedPlaneIndex + 1} placed`}
+            </Text>
+          </View>
+          <View style={styles.dockAndBoardWrap}>
+            <View
+              style={[
+                styles.boardWrap,
+                styles.boardLeft,
+                { width: boardWidth },
+              ]}
+            >
+              <View ref={gridContainerRef} collapsable={false}>
+                <PlacementGrid
+                  gridSize={placementGridSize}
+                  widthRatio={PLACEMENT_WIDTH_RATIO}
+                  placedPlanes={placedPlanes}
+                  previewCells={placementPreviewCells}
+                  previewValid={placementPreviewValid}
+                  movingPlaneIndex={movingPlaneIndex}
+                  gridContainerRef={gridContainerRef}
+                  dockDragging={!!dockDragPosition}
+                  onCellPress={(row, col) => onPreviewChange({ row, col })}
+                  onDragStart={(row, col) => onPreviewChange({ row, col })}
+                  onDragMove={(row, col) => onPreviewChange({ row, col })}
+                  onStartMovePlane={onStartMovePlane}
+                  onDragEnd={onDragEnd}
+                  onDragActiveChange={onDragActiveChange}
+                  mapBackground={false}
+                />
+              </View>
+            </View>
+            <View style={[styles.toolCard, { width: dockCardWidth }]}>
+              <PlaneDock
+                placementRotation={placementRotation}
+                placementGridSize={placementGridSize}
+                gridWidth={gridWidth}
+                boardWidth={boardWidth}
+                gridContainerRef={gridContainerRef}
+                dockPlaneRef={dockPlaneRef}
+                placedPlanes={placedPlanes}
+                selectedPlaneIndex={selectedPlaneIndex}
+                hasActivePreview={!!previewAt && movingPlaneIndex == null}
+                onPreviewChange={onPreviewChange}
+                onDragActiveChange={onDragActiveChange}
+                onDockDragPosition={onDockDragPosition}
+                onDockDragEnd={onDockDragEnd}
+                draggingPlaneIndex={dockDragPosition?.planeIndex ?? null}
+                planeColors={PLANE_COLORS}
+              />
+              <View style={styles.toolActions}>
+                {onRandomPlace && (
+                  <SoundPressable
+                    style={({ pressed }) => [
+                      styles.actionBtn,
+                      styles.actionBtnCompact,
+                      styles.actionBtnDockWidth,
+                      previewAt && styles.actionBtnDisabled,
+                      pressed && styles.actionBtnPressed,
+                    ]}
+                    onPress={onRandomPlace}
+                    disabled={!!previewAt}
+                  >
+                    <Text style={styles.actionBtnTextCompact}>Random</Text>
+                  </SoundPressable>
+                )}
+                <SoundPressable
+                  style={({ pressed }) => [
+                    styles.actionBtn,
+                    styles.actionBtnCompact,
+                    styles.actionBtnDockWidth,
+                    previewAt && styles.actionBtnDisabled,
+                    pressed && styles.actionBtnPressed,
+                  ]}
+                  onPress={onRotate}
+                  disabled={!!previewAt}
+                >
+                  <Text style={styles.actionBtnTextCompact}>↻ Rotate</Text>
+                </SoundPressable>
+              </View>
+            </View>
+          </View>
         </View>
       </PanGestureHandler>
 
@@ -314,25 +338,35 @@ export default function PlacementPhase({
         <SoundPressable
           style={({ pressed }) => [
             styles.footerBack,
+            allPlaced
+              ? placedCount === 0
+              : !currentPlanePlaced && !previewAt
+                ? styles.footerStartDisabled
+                : null,
             pressed && styles.footerBackPressed,
           ]}
-          onPress={onBack}
+          onPress={allPlaced && onClearAll ? onClearAll : onClearPlane}
+          disabled={
+            allPlaced ? placedCount === 0 : !currentPlanePlaced && !previewAt
+          }
         >
-          <Text style={styles.footerBackText}>← Back</Text>
+          <Text style={styles.footerBackText}>
+            {allPlaced && onClearAll ? "Clear all" : "Clear"}
+          </Text>
         </SoundPressable>
         <SoundPressable
           style={({ pressed }) => [
             styles.footerStart,
-            !allPlaced && styles.footerStartDisabled,
+            !showConfirm && !allPlaced && styles.footerStartDisabled,
             pressed && styles.footerStartPressed,
           ]}
-          onPress={onStartGame}
-          disabled={!allPlaced || loading}
+          onPress={footerPrimaryOnPress}
+          disabled={(!showConfirm && !allPlaced) || loading}
         >
           {loading ? (
             <ActivityIndicator color={UI_WHITE} size="small" />
           ) : (
-            <Text style={styles.footerStartText}>{startButtonLabel}</Text>
+            <Text style={styles.footerStartText}>{footerPrimaryLabel}</Text>
           )}
         </SoundPressable>
       </View>
@@ -348,11 +382,25 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     paddingHorizontal: 4,
   },
+  backButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginBottom: 6,
+  },
+  backButtonPressed: {
+    opacity: 0.7,
+  },
+  backButtonText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: UI_BODY_MUTED,
+  },
   topBar: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 10,
     paddingHorizontal: 4,
   },
   title: {
@@ -368,14 +416,14 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    marginBottom: 10,
     justifyContent: "center",
   },
   tab: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: UI_UNSELECTED_BG,
     alignItems: "center",
     justifyContent: "center",
@@ -402,29 +450,65 @@ const styles = StyleSheet.create({
   checkActive: {
     color: UI_WHITE,
   },
-  dockAndBoardWrap: {
-    width: "100%",
+  boardDockCenter: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
+  },
+  dockAndBoardWrap: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+    gap: 0,
+  },
+  boardLeft: {
+    flexShrink: 0,
+    marginBottom: 0,
+  },
+  hintContainer: {
+    backgroundColor: UI_UNSELECTED_BG,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginBottom: 12,
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  boardHint: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: UI_BODY,
+    textAlign: "center",
   },
   toolCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 18,
+    flexShrink: 0,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingRight: 8,
+    paddingLeft: 0,
+    marginBottom: 0,
   },
   toolActions: {
-    flexDirection: "row",
-    gap: 10,
+    flexDirection: "column",
+    alignItems: "center",
+    gap: 4,
     marginTop: 14,
-    justifyContent: "center",
+    marginLeft: 14,
   },
   actionBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    borderRadius: 6,
     backgroundColor: UI_UNSELECTED_BG,
-    minWidth: 88,
     alignItems: "center",
     justifyContent: "center",
+  },
+  actionBtnCompact: {
+    minWidth: 0,
+  },
+  actionBtnDockWidth: {
+    width: 96,
   },
   actionBtnPrimary: {
     backgroundColor: UI_PRIMARY,
@@ -440,27 +524,30 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: UI_BODY,
   },
-  actionBtnTextPrimary: {
-    fontSize: 15,
+  actionBtnTextCompact: {
+    fontSize: 10,
     fontWeight: "700",
+    color: UI_BODY,
+  },
+  actionBtnTextPrimary: {
     color: UI_WHITE,
   },
   boardWrap: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   footer: {
     flexDirection: "row",
-    gap: 14,
+    gap: 10,
     alignItems: "stretch",
   },
   footerBack: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 10,
     backgroundColor: UI_UNSELECTED_BG,
     justifyContent: "center",
     alignItems: "center",
-    minWidth: 100,
+    minWidth: 88,
   },
   footerBackPressed: {
     opacity: 0.9,
@@ -472,8 +559,8 @@ const styles = StyleSheet.create({
   },
   footerStart: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
     backgroundColor: UI_PRIMARY,
     justifyContent: "center",
     alignItems: "center",

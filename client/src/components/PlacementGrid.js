@@ -1,14 +1,5 @@
-import {
-  StyleSheet,
-  View,
-  Text,
-  Dimensions,
-  Pressable,
-} from "react-native";
-import {
-  PanGestureHandler,
-  State,
-} from "react-native-gesture-handler";
+import { StyleSheet, View, Text, Dimensions, Pressable } from "react-native";
+import { PanGestureHandler, State } from "react-native-gesture-handler";
 import { useMemo, useRef, useEffect, useCallback } from "react";
 import {
   UI_BODY,
@@ -19,17 +10,21 @@ import {
   UI_WHITE,
 } from "../constants/constants";
 
-const MIN_CELL = 24;
-const MAX_CELL = 40;
+const MIN_CELL_PLACEMENT = 14;
+const MAX_CELL_PLACEMENT = 48;
+const REFERENCE_GRID_SIZE = 10;
 const HORIZONTAL_PADDING = 32;
 export const PLACEMENT_LABEL_WIDTH = 20;
+export const PLACEMENT_WIDTH_RATIO = 0.75;
 const LABEL_WIDTH = PLACEMENT_LABEL_WIDTH;
 
-export function getPlacementCellSize(gridSize) {
+export function getPlacementCellSize(gridSize, widthRatio = 1) {
   const { width } = Dimensions.get("window");
-  const maxGrid = width - HORIZONTAL_PADDING * 2 - PLACEMENT_LABEL_WIDTH;
-  const size = Math.floor(maxGrid / gridSize);
-  return Math.min(MAX_CELL, Math.max(MIN_CELL, size));
+  const available =
+    (width - HORIZONTAL_PADDING * 2) * widthRatio - PLACEMENT_LABEL_WIDTH;
+  const refCellSize = Math.floor(available / REFERENCE_GRID_SIZE);
+  const size = Math.floor((REFERENCE_GRID_SIZE / gridSize) * refCellSize);
+  return Math.min(MAX_CELL_PLACEMENT, Math.max(MIN_CELL_PLACEMENT, size));
 }
 
 function colToLetter(col) {
@@ -63,26 +58,40 @@ function getCellPlacementState(
 
 const PLANE_COLORS = ["#5c6bc0", "#43a047", "#fb8c00"];
 
-function coordsToCellFromLocal(locationX, locationY, cellSize, labelWidth, gridSize) {
+function coordsToCellFromLocal(
+  locationX,
+  locationY,
+  cellSize,
+  labelWidth,
+  gridSize,
+) {
   const col = Math.floor((locationX - labelWidth) / cellSize);
   const row = Math.floor((locationY - cellSize) / cellSize);
   if (row < 0 || row >= gridSize || col < 0 || col >= gridSize) return null;
   return { row, col };
 }
 
-function coordsToCellFromPage(pageX, pageY, gridLayout, cellSize, labelWidth, gridSize) {
+function coordsToCellFromPage(
+  pageX,
+  pageY,
+  gridLayout,
+  cellSize,
+  labelWidth,
+  gridSize,
+) {
   if (!gridLayout) return null;
   const localX = pageX - gridLayout.x;
   const localY = pageY - gridLayout.y;
   return coordsToCellFromLocal(localX, localY, cellSize, labelWidth, gridSize);
 }
 
-function getCellSize(gridSize) {
-  return getPlacementCellSize(gridSize);
+function getCellSize(gridSize, widthRatio = 1) {
+  return getPlacementCellSize(gridSize, widthRatio);
 }
 
 export default function PlacementGrid({
   gridSize,
+  widthRatio = 1,
   placedPlanes = [],
   previewCells = null,
   previewValid = false,
@@ -97,7 +106,7 @@ export default function PlacementGrid({
   onDragActiveChange,
   mapBackground = false,
 }) {
-  const cellSize = getCellSize(gridSize);
+  const cellSize = getCellSize(gridSize, widthRatio);
   const labelFontSize = Math.max(10, Math.min(14, cellSize - 4));
   const gridLayoutRef = useRef(null);
   const gridViewRef = useRef(null);
@@ -142,7 +151,11 @@ export default function PlacementGrid({
             if (stateObj.type === "plane" && onStartMovePlane) {
               const plane = placedPlanes[stateObj.index];
               if (plane?.head)
-                onStartMovePlane(stateObj.index, plane.head.row, plane.head.col);
+                onStartMovePlane(
+                  stateObj.index,
+                  plane.head.row,
+                  plane.head.col,
+                );
             } else if (onDragStart) {
               onDragStart(cell.row, cell.col);
             }
@@ -171,7 +184,11 @@ export default function PlacementGrid({
   const handlePanGesture = useCallback(
     (evt) => {
       const ne = evt?.nativeEvent;
-      if (!ne || typeof ne.absoluteX !== "number" || typeof ne.absoluteY !== "number")
+      if (
+        !ne ||
+        typeof ne.absoluteX !== "number" ||
+        typeof ne.absoluteY !== "number"
+      )
         return;
       const cell = pageToCell(ne.absoluteX, ne.absoluteY);
       if (pendingGrantRef.current && cell) {
@@ -258,10 +275,7 @@ export default function PlacementGrid({
         cells.push(
           <Pressable
             key={`${r}-${c}`}
-            style={({ pressed }) => [
-              cellStyle,
-              pressed && styles.cellPressed,
-            ]}
+            style={({ pressed }) => [cellStyle, pressed && styles.cellPressed]}
             onPressIn={() => {
               if (plane?.head)
                 onStartMovePlane(state.index, plane.head.row, plane.head.col);
@@ -279,16 +293,11 @@ export default function PlacementGrid({
           </Pressable>,
         );
       } else {
-        const handlePress = onCellPress
-          ? () => onCellPress(r, c)
-          : undefined;
+        const handlePress = onCellPress ? () => onCellPress(r, c) : undefined;
         cells.push(
           <Pressable
             key={`${r}-${c}`}
-            style={({ pressed }) => [
-              cellStyle,
-              pressed && styles.cellPressed,
-            ]}
+            style={({ pressed }) => [cellStyle, pressed && styles.cellPressed]}
             onPressIn={handlePress}
           >
             <Text

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { StyleSheet, View, Text } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { PLANE_SHAPE, getShapeCells } from "../utils/planeShape";
-import { getPlacementCellSize } from "./PlacementGrid";
+import { getPlacementCellSize, PLACEMENT_WIDTH_RATIO } from "./PlacementGrid";
 import { UI_BODY_MUTED } from "../constants/constants";
 
 const DOCK_PIVOTS = [
@@ -22,7 +22,7 @@ export function DockDragShadow({
   planeColor,
   placementGridSize = 10,
 }) {
-  const cellSize = getPlacementCellSize(placementGridSize);
+  const cellSize = getPlacementCellSize(placementGridSize, PLACEMENT_WIDTH_RATIO);
   const shadowSize = SHADOW_GRID_SIZE * cellSize;
   const shapeCells = useMemo(() => {
     const pivot = DOCK_PIVOTS[rotation] ?? DOCK_PIVOTS[0];
@@ -135,21 +135,21 @@ export default function PlaneDock({
   return (
     <View style={styles.root}>
       {isCurrentPlanePlaced ? (
-        <>
-          <Text style={styles.placedLabel}>
-            Plane {selectedPlaneIndex + 1} placed
-          </Text>
-          <Text style={styles.placedHint}>
-            Select another tab or tap Clear to move it back
-          </Text>
-        </>
+        <View
+          style={[
+            styles.planeWrap,
+            { width: previewSize, height: previewSize },
+            styles.planeWrapDisabled,
+          ]}
+        >
+          <View
+            style={[styles.grid, { width: previewSize, height: previewSize }]}
+          >
+            {grid}
+          </View>
+        </View>
       ) : (
         <>
-          <Text style={styles.hint}>
-            {hasActivePreview
-              ? "Adjust position on board below, then press Confirm"
-              : `Plane ${selectedPlaneIndex + 1} — drag onto board below`}
-          </Text>
           {hasActivePreview ? (
             <View
               style={[
@@ -202,17 +202,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: UI_BODY_MUTED,
     marginBottom: 8,
-  },
-  placedLabel: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: UI_BODY_MUTED,
-  },
-  placedHint: {
-    fontSize: 12,
-    color: UI_BODY_MUTED,
-    marginTop: 4,
-    opacity: 0.9,
   },
   preview: {
     padding: 12,

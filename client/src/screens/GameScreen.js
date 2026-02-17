@@ -24,6 +24,7 @@ import PlacementPhase from "../components/PlacementPhase";
 import { DockDragShadow } from "../components/PlaneDock";
 import {
   getPlacementCellSize,
+  PLACEMENT_WIDTH_RATIO,
   PLACEMENT_LABEL_WIDTH,
 } from "../components/PlacementGrid";
 import VersusScreen from "../components/VersusScreen";
@@ -287,7 +288,7 @@ export default function GameScreen() {
         pageX >= x && pageX <= x + w && pageY >= y && pageY <= y + h;
       setDockDragOverGrid(inside);
       if (inside && placementPhase) {
-        const cellSize = getPlacementCellSize(placementGridSize);
+        const cellSize = getPlacementCellSize(placementGridSize, PLACEMENT_WIDTH_RATIO);
         const localX = pageX - x;
         const localY = pageY - y;
         const col = Math.floor((localX - PLACEMENT_LABEL_WIDTH) / cellSize);
@@ -508,6 +509,13 @@ export default function GameScreen() {
     setMovingPlaneIndex(null);
     setDockDragPosition(null);
   }, [selectedPlaneIndex]);
+
+  const handleClearAll = useCallback(() => {
+    setPlacedPlanes((prev) => prev.map(() => null));
+    setPreviewAt(null);
+    setMovingPlaneIndex(null);
+    setDockDragPosition(null);
+  }, []);
 
   const handleSelectPlane = useCallback((index) => {
     setSelectedPlaneIndex(index);
@@ -1235,6 +1243,7 @@ export default function GameScreen() {
               placementRotation={placementRotation}
               onRotate={() => setPlacementRotation((r) => (r + 1) % 4)}
               onClearPlane={handleClearPlane}
+              onClearAll={handleClearAll}
               previewAt={previewAt}
               onPreviewChange={(pos) => {
                 setPreviewAt(pos);
@@ -1261,6 +1270,16 @@ export default function GameScreen() {
                 }
               }}
               onStartGame={startGameFromPlacement}
+              onRandomPlace={() => {
+                const numPlanes = lanJoinInfo?.numPlanes ?? placementNumPlanes;
+                const planes = generateRandomPlanes(placementGridSize, numPlanes);
+                if (planes.length === numPlanes) {
+                  setPlacedPlanes(planes);
+                  setPreviewAt(null);
+                  setMovingPlaneIndex(null);
+                  setDockDragPosition(null);
+                }
+              }}
               loading={loading}
               startButtonLabel={
                 lanJoinInfo ? "Join game" : lanMode === "host" ? "Host game" : "Start game"
