@@ -37,3 +37,28 @@ export function getShapeCellsFromHead(shape, headRow, headCol, rotation, gridSiz
   const pivotCol = headCol - dc;
   return getShapeCells(shape, pivotRow, pivotCol, rotation, gridSize);
 }
+
+export function generateRandomPlanes(gridSize, numPlanes) {
+  const occupied = new Set();
+  const planes = [];
+  let attempts = 0;
+  const maxAttempts = 300;
+  while (planes.length < numPlanes && attempts < maxAttempts) {
+    attempts++;
+    const rotation = Math.floor(Math.random() * 4);
+    const pivotRow = Math.floor(Math.random() * gridSize);
+    const pivotCol = Math.floor(Math.random() * gridSize);
+    const cells = getShapeCells(PLANE_SHAPE, pivotRow, pivotCol, rotation, gridSize);
+    if (!cells) continue;
+    const keys = cells.map((c) => `${c.row},${c.col}`);
+    if (keys.some((k) => occupied.has(k))) continue;
+    keys.forEach((k) => occupied.add(k));
+    planes.push({
+      id: planes.length + 1,
+      cells,
+      head: cells[HEAD_INDEX],
+      rotation,
+    });
+  }
+  return planes;
+}

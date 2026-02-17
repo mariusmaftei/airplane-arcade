@@ -34,6 +34,19 @@ function recordShot(gameId) {
   lastShotAt.set(gameId, Date.now());
 }
 
+function findByLobbyCode(code) {
+  const upper = String(code || "").toUpperCase();
+  for (const [id, state] of games) {
+    if (state.isLanMatch && state.lobbyCode?.toUpperCase() === upper)
+      return id;
+  }
+  return null;
+}
+
+function getAllIds() {
+  return Array.from(games.keys());
+}
+
 export {
   create,
   get,
@@ -41,5 +54,7 @@ export {
   canShoot,
   getCooldownRemainingMs,
   recordShot,
+  findByLobbyCode,
+  getAllIds,
   SHOOT_COOLDOWN_MS,
 };

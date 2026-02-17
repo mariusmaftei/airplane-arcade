@@ -50,6 +50,7 @@ export default function PlacementPhase({
   onBack,
   onStartGame,
   loading,
+  startButtonLabel = "Start game",
 }) {
   const internalGridRef = useRef(null);
   const gridContainerRef = placementGridContainerRef ?? internalGridRef;
@@ -331,7 +332,7 @@ export default function PlacementPhase({
           {loading ? (
             <ActivityIndicator color={UI_WHITE} size="small" />
           ) : (
-            <Text style={styles.footerStartText}>Start game</Text>
+            <Text style={styles.footerStartText}>{startButtonLabel}</Text>
           )}
         </SoundPressable>
       </View>

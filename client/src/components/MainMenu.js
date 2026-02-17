@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -24,6 +24,7 @@ import {
 } from "../constants/constants";
 import MapCarousel from "./MapCarousel";
 import BoardPreview from "./BoardPreview";
+import LanJoinForm from "./LanJoinForm";
 
 const GAME_MODES = [
   { id: "computer", label: "vs Computer" },
@@ -49,15 +50,35 @@ export default function MainMenu({
   loading,
   onNewGame,
   onPlacePlanes,
+  lanMode,
+  onLanModeChange,
+  onHostLan,
+  onJoinLanFound,
+  onJoinPlacePlanes,
+  onJoinWithRandomPlanes,
+  onFindLanGame,
+  onServerUrlChange,
+  joinLoading,
+  lanJoinInfo,
+  baseUrl,
 }) {
   const [stage, setStage] = useState(1);
+  const [joinConnectStep, setJoinConnectStep] = useState(1);
   const isMultiplayer = gameMode === "multiplayer";
+
+  useEffect(() => {
+    if (lanMode !== "join") setJoinConnectStep(1);
+  }, [lanMode]);
 
   return (
     <View style={styles.content}>
       <View style={styles.header}>
         {stage === 1 && (
-          <Image source={INTRO_IMAGE} style={styles.logo} resizeMode="contain" />
+          <Image
+            source={INTRO_IMAGE}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         )}
         <Text style={styles.title}>Airplane Arcade</Text>
         <Text style={styles.tagline}>Place. Shoot. Sink.</Text>
@@ -65,18 +86,6 @@ export default function MainMenu({
 
       {stage === 1 ? (
         <>
-          <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Your name</Text>
-            <TextInput
-              style={styles.nameInput}
-              value={playerName}
-              onChangeText={onPlayerNameChange}
-              placeholder="Player1"
-              placeholderTextColor="#9ca3af"
-              maxLength={20}
-            />
-          </View>
-
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>Game mode</Text>
             <View style={styles.pillRow}>
@@ -109,53 +118,70 @@ export default function MainMenu({
 
           {isMultiplayer && (
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>Number of players</Text>
+              <Text style={styles.sectionLabel}>LAN multiplayer</Text>
               <View style={styles.chipRow}>
-                {Array.from(
-                  { length: MAX_PLAYERS - MIN_PLAYERS + 1 },
-                  (_, i) => MIN_PLAYERS + i,
-                ).map((n) => (
-                  <SoundPressable
-                    key={n}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      numPlayers === n
-                        ? styles.chipSelected
-                        : styles.chipUnselected,
-                      pressed && styles.chipPressed,
+                <SoundPressable
+                  style={({ pressed }) => [
+                    styles.chip,
+                    lanMode === "host"
+                      ? styles.chipSelected
+                      : styles.chipUnselected,
+                    pressed && styles.chipPressed,
+                  ]}
+                  onPress={() => onLanModeChange?.("host")}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      lanMode === "host"
+                        ? styles.chipTextSelected
+                        : styles.chipTextUnselected,
                     ]}
-                    onPress={() => onNumPlayersChange(n)}
                   >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        numPlayers === n
-                          ? styles.chipTextSelected
-                          : styles.chipTextUnselected,
-                      ]}
-                    >
-                      {n}
-                    </Text>
-                  </SoundPressable>
-                ))}
+                    Host
+                  </Text>
+                </SoundPressable>
+                <SoundPressable
+                  style={({ pressed }) => [
+                    styles.chip,
+                    lanMode === "join"
+                      ? styles.chipSelected
+                      : styles.chipUnselected,
+                    pressed && styles.chipPressed,
+                  ]}
+                  onPress={() => onLanModeChange?.("join")}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      lanMode === "join"
+                        ? styles.chipTextSelected
+                        : styles.chipTextUnselected,
+                    ]}
+                  >
+                    Join
+                  </Text>
+                </SoundPressable>
               </View>
               <Text style={styles.hint}>
-                {numPlayers === 2 ? "1 vs 1" : `${numPlayers} players`}
+                Host creates game, Join enters code
               </Text>
             </View>
           )}
 
-          <SoundPressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.primaryButtonPressed,
-            ]}
-            onPress={() => setStage(2)}
-          >
-            <Text style={styles.primaryButtonText}>Continue</Text>
-          </SoundPressable>
+          {(!isMultiplayer || lanMode) ? (
+            <SoundPressable
+              style={({ pressed }) => [
+                styles.primaryButton,
+                pressed && styles.primaryButtonPressed,
+              ]}
+              onPress={() => setStage(2)}
+            >
+              <Text style={styles.primaryButtonText}>Continue</Text>
+            </SoundPressable>
+          ) : null}
         </>
-      ) : (
+      ) : stage === 2 ? (
         <>
           <SoundPressable
             style={({ pressed }) => [
@@ -167,150 +193,248 @@ export default function MainMenu({
             <Text style={styles.backButtonText}>← Back</Text>
           </SoundPressable>
 
-          <View style={[styles.card, styles.cardCompact]}>
-            <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
-              Difficulty
-            </Text>
-            <View style={[styles.diffRow, styles.diffRowCompact]}>
-              {DIFFICULTIES.map((d) => {
-                const isActive = difficulty === d.id;
-                return (
-                  <SoundPressable
-                    key={d.id}
-                    style={({ pressed }) => [
-                      styles.diffCard,
-                      styles.diffCardCompact,
-                      isActive
-                        ? styles.diffCardSelected
-                        : styles.diffCardUnselected,
-                      pressed && styles.diffCardPressed,
-                    ]}
-                    onPress={() => onDifficultyChange(d.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.diffLabel,
-                        styles.diffLabelCompact,
-                        isActive
-                          ? styles.diffLabelSelected
-                          : styles.diffLabelUnselected,
-                      ]}
-                    >
-                      {d.label}
-                    </Text>
-                  </SoundPressable>
-                );
-              })}
-            </View>
-          </View>
-
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>Board preview</Text>
-            {(() => {
-              const d = DIFFICULTIES.find((x) => x.id === difficulty);
-              return d ? (
-                <Text style={styles.hint}>
-                  {d.desc} • {d.gridSize}×{d.gridSize} grid • {d.numPlanes}{" "}
-                  plane
-                  {d.numPlanes > 1 ? "s" : ""}
-                </Text>
-              ) : null;
-            })()}
-            <View style={styles.boardPreviewWrap}>
-              <BoardPreview
-                gridSize={
-                  DIFFICULTIES.find((d) => d.id === difficulty)?.gridSize ?? 10
-                }
-                mapId={mapId}
-                size={112}
-              />
-            </View>
-            <Text style={styles.mapName}>
-              {MAP_OPTIONS.find((m) => m.id === mapId)?.label ?? "Default"}
-            </Text>
-          </View>
-
-          <View style={[styles.card, styles.cardCompact]}>
-            <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
-              Map
-            </Text>
-            <MapCarousel
-              mapOptions={MAP_OPTIONS}
-              selectedId={mapId}
-              onSelect={onMapIdChange}
-              compact
+            <Text style={styles.sectionLabel}>Your name</Text>
+            <TextInput
+              style={styles.nameInput}
+              value={playerName}
+              onChangeText={onPlayerNameChange}
+              placeholder="Player1"
+              placeholderTextColor="#9ca3af"
+              maxLength={20}
             />
-          </View>
-
-          <View style={[styles.card, styles.cardCompact]}>
-            <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
-              Plane placement
-            </Text>
-            <View style={[styles.pillRow, styles.pillRowCompact]}>
-              <SoundPressable
-                style={({ pressed }) => [
-                  styles.pill,
-                  styles.pillCompact,
-                  customPlacement ? styles.pillSelected : styles.pillUnselected,
-                  pressed && styles.pillPressed,
-                ]}
-                onPress={() => !customPlacement && onCustomPlacementToggle()}
-              >
-                  <Text
-                    style={[
-                      styles.pillText,
-                      styles.pillTextCompact,
-                      customPlacement
-                      ? styles.pillTextSelected
-                      : styles.pillTextUnselected,
-                  ]}
-                >
-                  Custom
-                </Text>
-              </SoundPressable>
-              <SoundPressable
-                style={({ pressed }) => [
-                  styles.pill,
-                  styles.pillCompact,
-                  !customPlacement
-                    ? styles.pillSelected
-                    : styles.pillUnselected,
-                  pressed && styles.pillPressed,
-                ]}
-                onPress={() => customPlacement && onCustomPlacementToggle()}
-              >
-                  <Text
-                    style={[
-                      styles.pillText,
-                      styles.pillTextCompact,
-                      !customPlacement
-                      ? styles.pillTextSelected
-                      : styles.pillTextUnselected,
-                  ]}
-                >
-                  Random
-                </Text>
-              </SoundPressable>
-            </View>
           </View>
 
           <SoundPressable
             style={({ pressed }) => [
               styles.primaryButton,
-              loading && styles.primaryButtonDisabled,
-              pressed && !loading && styles.primaryButtonPressed,
+              pressed && styles.primaryButtonPressed,
             ]}
-            onPress={customPlacement ? onPlacePlanes : onNewGame}
-            disabled={loading}
+            onPress={() => setStage(3)}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {customPlacement ? "Place planes" : "Start Game"}
-              </Text>
-            )}
+            <Text style={styles.primaryButtonText}>Continue</Text>
           </SoundPressable>
+        </>
+      ) : (
+        <>
+          <SoundPressable
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}
+            onPress={() => {
+              if (lanMode === "join" && joinConnectStep === 2) {
+                setJoinConnectStep(1);
+              } else {
+                setStage(2);
+                setJoinConnectStep(1);
+              }
+            }}
+          >
+            <Text style={styles.backButtonText}>← Back</Text>
+          </SoundPressable>
+
+          {isMultiplayer && lanMode === "join" && joinConnectStep === 2 ? (
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>Connect to LAN</Text>
+              <LanJoinForm
+                onFound={(info) => {
+                  if (customPlacement) {
+                    onJoinLanFound(info);
+                    onJoinPlacePlanes();
+                  } else {
+                    onJoinWithRandomPlanes?.(info);
+                  }
+                }}
+                loading={joinLoading}
+                onFind={onFindLanGame}
+                onServerUrlChange={onServerUrlChange}
+                baseUrl={baseUrl}
+                buttonLabel="Connect"
+              />
+            </View>
+          ) : (
+          <>
+            {(!isMultiplayer || lanMode === "host") && (
+            <View style={[styles.card, styles.cardCompact]}>
+              <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
+                Difficulty
+              </Text>
+              <View style={[styles.diffRow, styles.diffRowCompact]}>
+                {DIFFICULTIES.map((d) => {
+                  const isActive = difficulty === d.id;
+                  return (
+                    <SoundPressable
+                      key={d.id}
+                      style={({ pressed }) => [
+                        styles.diffCard,
+                        styles.diffCardCompact,
+                        isActive
+                          ? styles.diffCardSelected
+                          : styles.diffCardUnselected,
+                        pressed && styles.diffCardPressed,
+                      ]}
+                      onPress={() => onDifficultyChange(d.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.diffLabel,
+                          styles.diffLabelCompact,
+                          isActive
+                            ? styles.diffLabelSelected
+                            : styles.diffLabelUnselected,
+                        ]}
+                      >
+                        {d.label}
+                      </Text>
+                    </SoundPressable>
+                );
+              })}
+            </View>
+          </View>
+            )}
+
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>Board preview</Text>
+              {isMultiplayer && lanMode === "join" ? (
+                <Text style={styles.hint}>
+                  10×10 grid • 3 planes (from host game)
+                </Text>
+              ) : (
+                (() => {
+                  const d = DIFFICULTIES.find((x) => x.id === difficulty);
+                  return d ? (
+                    <Text style={styles.hint}>
+                      {d.desc} • {d.gridSize}×{d.gridSize} grid • {d.numPlanes}{" "}
+                      plane
+                      {d.numPlanes > 1 ? "s" : ""}
+                    </Text>
+                  ) : null;
+                })()
+              )}
+              <View style={styles.boardPreviewWrap}>
+                <BoardPreview
+                  gridSize={
+                    isMultiplayer && lanMode === "join"
+                      ? 10
+                      : DIFFICULTIES.find((d) => d.id === difficulty)?.gridSize ?? 10
+                  }
+                  mapId={mapId}
+                  size={112}
+                />
+              </View>
+              <Text style={styles.mapName}>
+                {MAP_OPTIONS.find((m) => m.id === mapId)?.label ?? "Default"}
+              </Text>
+            </View>
+
+            <View style={[styles.card, styles.cardCompact]}>
+              <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
+                Map
+              </Text>
+              <MapCarousel
+                mapOptions={MAP_OPTIONS}
+                selectedId={mapId}
+                onSelect={onMapIdChange}
+                compact
+              />
+            </View>
+
+            <View style={[styles.card, styles.cardCompact]}>
+              <Text style={[styles.sectionLabel, styles.sectionLabelCompact]}>
+                Plane placement
+              </Text>
+              <View style={[styles.pillRow, styles.pillRowCompact]}>
+                <SoundPressable
+                  style={({ pressed }) => [
+                    styles.pill,
+                    styles.pillCompact,
+                    customPlacement
+                      ? styles.pillSelected
+                      : styles.pillUnselected,
+                    pressed && styles.pillPressed,
+                  ]}
+                  onPress={() => !customPlacement && onCustomPlacementToggle()}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      styles.pillTextCompact,
+                      customPlacement
+                        ? styles.pillTextSelected
+                        : styles.pillTextUnselected,
+                    ]}
+                  >
+                    Custom
+                  </Text>
+                </SoundPressable>
+                <SoundPressable
+                  style={({ pressed }) => [
+                    styles.pill,
+                    styles.pillCompact,
+                    !customPlacement
+                      ? styles.pillSelected
+                      : styles.pillUnselected,
+                    pressed && styles.pillPressed,
+                  ]}
+                  onPress={() => customPlacement && onCustomPlacementToggle()}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      styles.pillTextCompact,
+                      !customPlacement
+                        ? styles.pillTextSelected
+                        : styles.pillTextUnselected,
+                    ]}
+                  >
+                    Random
+                  </Text>
+                </SoundPressable>
+              </View>
+            </View>
+
+            {isMultiplayer && lanMode === "join" ? (
+              <SoundPressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.primaryButtonPressed,
+                ]}
+                onPress={() => setJoinConnectStep(2)}
+              >
+                <Text style={styles.primaryButtonText}>Connect to LAN</Text>
+              </SoundPressable>
+            ) : (
+              <SoundPressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  loading && styles.primaryButtonDisabled,
+                  pressed && !loading && styles.primaryButtonPressed,
+                ]}
+                onPress={
+                  isMultiplayer && lanMode === "host"
+                    ? onHostLan
+                    : customPlacement
+                      ? onPlacePlanes
+                      : onNewGame
+                }
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {isMultiplayer && lanMode === "host"
+                      ? "Host game"
+                      : customPlacement
+                        ? "Place planes"
+                        : "Start Game"}
+                  </Text>
+                )}
+              </SoundPressable>
+            )}
+          </>
+          )}
         </>
       )}
     </View>

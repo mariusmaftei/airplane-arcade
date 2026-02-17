@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAudioPlayer, setAudioModeAsync } from "expo-audio";
 import MathPaperBackground from "../components/MathPaperBackground";
+import VideoMapBackground from "../components/VideoMapBackground";
 import IntroScreen from "./IntroScreen";
 import MainMenu from "../components/MainMenu";
 import PlacementPhase from "../components/PlacementPhase";
@@ -27,24 +28,38 @@ import {
 } from "../components/PlacementGrid";
 import VersusScreen from "../components/VersusScreen";
 import GamePhase from "../components/GamePhase";
+import LanHostLobby from "../components/LanHostLobby";
+import LanHostSetup from "../components/LanHostSetup";
+import SoundPressable from "../components/SoundPressable";
 import {
   createGame,
   shoot,
   giveUp as giveUpApi,
   cpuShoot as cpuShootApi,
+  lanLookup,
+  lanJoin,
+  lanStatus,
+  lanJoining,
+  lanHostReady,
+  lanJoinerReady,
 } from "../services/game-services";
 import {
   PLANE_SHAPE,
   getShapeCells,
   getShapeCellsFromHead,
+  generateRandomPlanes,
 } from "../utils/planeShape";
 import {
   DIFFICULTIES,
   MAP_OPTIONS,
   UI_PAGE_BG,
+  UI_PRIMARY,
+  UI_WHITE,
   BATTLE_MUSIC_TRACKS,
   WINNING_SOUND,
 } from "../constants/constants";
+import { useSoundSettings } from "../contexts/SoundSettingsContext";
+import { useApiConfig } from "../contexts/ApiConfigContext";
 
 const HIT_SOUND = require("../../assets/sounds/Big Explosion Sound Effect - Lightning Editor.mp3");
 const MISS_SOUND = require("../../assets/sounds/Sound Effect - Missile Launch.mp3");
@@ -90,10 +105,46 @@ export default function GameScreen() {
   const [turnSwitchDelay, setTurnSwitchDelay] = useState(false);
   const [playerBoardHits, setPlayerBoardHits] = useState([]);
   const [playerBoardMisses, setPlayerBoardMisses] = useState([]);
+  const [playerPlanesSunk, setPlayerPlanesSunk] = useState(0);
+  const [cpuPlanesSunk, setCpuPlanesSunk] = useState(0);
   const [playerWon, setPlayerWon] = useState(null);
   const [showVersusScreen, setShowVersusScreen] = useState(false);
   const [versusLeftName, setVersusLeftName] = useState("");
   const [versusRightName, setVersusRightName] = useState("");
+  const [versusTurnName, setVersusTurnName] = useState("");
+  const [lanMode, setLanMode] = useState(null);
+  const [lanPlayerSide, setLanPlayerSide] = useState(null);
+  const [lanLobbyCode, setLanLobbyCode] = useState("");
+  const [lanHostIp, setLanHostIp] = useState("");
+  const [lanWaitingForOpponent, setLanWaitingForOpponent] = useState(false);
+  const [lanConnectionLost, setLanConnectionLost] = useState(false);
+  const [lanJoiningPlayer, setLanJoiningPlayer] = useState(null);
+  const [lanJoinerReadyFromServer, setLanJoinerReadyFromServer] = useState(false);
+  const [lanConnectedPlayerName, setLanConnectedPlayerName] = useState(null);
+  const [lanOpponentName, setLanOpponentName] = useState(null);
+  const [lanOpponents, setLanOpponents] = useState([]);
+  const [selectedTargetId, setSelectedTargetId] = useState(null);
+  const [lanCurrentTurnName, setLanCurrentTurnName] = useState(null);
+  const [lanCurrentTurnId, setLanCurrentTurnId] = useState(null);
+  const [lanAllPlayers, setLanAllPlayers] = useState([]);
+  const [lanHostReadySent, setLanHostReadySent] = useState(false);
+  const [lanJoinerReadySent, setLanJoinerReadySent] = useState(false);
+  const [lanWaitingForHost, setLanWaitingForHost] = useState(false);
+  const [lanHostReadyFromServer, setLanHostReadyFromServer] = useState(false);
+  const [lanJoinInfo, setLanJoinInfo] = useState(null);
+  const [lanJoinStatus, setLanJoinStatus] = useState(null);
+  const [joinLoading, setJoinLoading] = useState(false);
+  const [showLanHostSetup, setShowLanHostSetup] = useState(false);
+  const [lanHostConfig, setLanHostConfig] = useState({
+    password: null,
+    minPlayers: 2,
+    maxPlayers: 2,
+  });
+  const lanHostConfigRef = useRef(lanHostConfig);
+  lanHostConfigRef.current = lanHostConfig;
+  const lanServerUrlRef = useRef(null);
+  const lanJoinerBaseUrlRef = useRef(null);
+  const lastTurnSwitchAtShownRef = useRef(0);
 
   const timerRef = useRef(null);
   const versusTimeoutRef = useRef(null);
@@ -106,6 +157,11 @@ export default function GameScreen() {
   const missPlayer = useAudioPlayer(MISS_SOUND, { shouldPlay: false });
   const battleMusicPlayer = useAudioPlayer(null, { shouldPlay: false });
   const winningPlayer = useAudioPlayer(WINNING_SOUND, { shouldPlay: false });
+  const {
+    soundEffectsVolumeEffective,
+    battleMusicVolumeEffective,
+  } = useSoundSettings();
+  const { baseUrl, setServerUrlOverride, resetServerUrl } = useApiConfig();
 
   const difficultyConfig =
     DIFFICULTIES.find((d) => d.id === difficulty) || DIFFICULTIES[1];
@@ -133,10 +189,16 @@ export default function GameScreen() {
   }, []);
 
   useEffect(() => {
-    hitPlayer.volume = 0.4;
-    missPlayer.volume = 0.5;
-    winningPlayer.volume = 0.6;
-  }, [hitPlayer, missPlayer, winningPlayer]);
+    const v = soundEffectsVolumeEffective;
+    hitPlayer.volume = 0.4 * v;
+    missPlayer.volume = 0.5 * v;
+    winningPlayer.volume = 0.6 * v;
+  }, [
+    hitPlayer,
+    missPlayer,
+    winningPlayer,
+    soundEffectsVolumeEffective,
+  ]);
 
   useEffect(() => {
     if (playerWon === true) {
@@ -156,11 +218,15 @@ export default function GameScreen() {
     battleTrackIndexRef.current = nextIndex;
     const track = BATTLE_MUSIC_TRACKS[nextIndex];
     battleMusicPlayer.replace(track);
-    battleMusicPlayer.volume = 0.35;
+    battleMusicPlayer.volume = 0.35 * battleMusicVolumeEffective;
     battleMusicPlayer.loop = false;
     battleMusicPlayer.seekTo(0);
     battleMusicPlayer.play();
-  }, [battleMusicPlayer]);
+  }, [battleMusicPlayer, battleMusicVolumeEffective]);
+
+  useEffect(() => {
+    battleMusicPlayer.volume = 0.35 * battleMusicVolumeEffective;
+  }, [battleMusicPlayer, battleMusicVolumeEffective]);
 
   useEffect(() => {
     if (isBattleActive) {
@@ -170,14 +236,14 @@ export default function GameScreen() {
       const track =
         BATTLE_MUSIC_TRACKS[battleTrackIndexRef.current];
       battleMusicPlayer.replace(track);
-      battleMusicPlayer.volume = 0.35;
+      battleMusicPlayer.volume = 0.35 * battleMusicVolumeEffective;
       battleMusicPlayer.loop = false;
       battleMusicPlayer.seekTo(0);
       battleMusicPlayer.play();
     } else {
       battleMusicPlayer.pause();
     }
-  }, [isBattleActive, battleMusicPlayer]);
+  }, [isBattleActive, battleMusicPlayer, battleMusicVolumeEffective]);
 
   useEffect(() => {
     const disposer = battleMusicPlayer?.addListener?.(
@@ -252,6 +318,8 @@ export default function GameScreen() {
     setGaveUp(false);
     setRevealedCells([]);
     setExplodingCell(null);
+    setPlayerPlanesSunk(0);
+    setCpuPlanesSunk(0);
     setSmokeCell(null);
     setTurnSwitchDelay(false);
     setIsPlayerTurn(true);
@@ -273,13 +341,115 @@ export default function GameScreen() {
     }
   }, [difficulty, difficultyConfig.gridSize, gameMode]);
 
-  const startPlacementPhase = useCallback(() => {
-    setPlacedPlanes(Array(difficultyConfig.numPlanes).fill(null));
+  const startPlacementPhase = useCallback((overrides = {}) => {
+    const numPlanes = overrides.numPlanes ?? difficultyConfig.numPlanes;
+    const gridSize = overrides.gridSize ?? difficultyConfig.gridSize;
+    setPlacedPlanes(Array(numPlanes).fill(null));
     setSelectedPlaneIndex(0);
     setPlacementRotation(0);
     setPreviewAt(null);
     setPlacementPhase(true);
-  }, [difficultyConfig.numPlanes]);
+    if (overrides.lanJoin) {
+      setLanJoinInfo(overrides.lanJoin);
+    }
+  }, [difficultyConfig.numPlanes, difficultyConfig.gridSize]);
+
+  const startHostLan = useCallback(() => {
+    setLanMode("host");
+    setShowLanHostSetup(true);
+  }, []);
+
+  const handleLanHostSetupContinue = useCallback((config) => {
+    const c = config ?? { password: null, minPlayers: 2, maxPlayers: 2 };
+    lanHostConfigRef.current = c;
+    setLanHostConfig(c);
+    setShowLanHostSetup(false);
+    startPlacementPhase();
+  }, [startPlacementPhase]);
+
+  const handleJoinLanFound = useCallback((info) => {
+    setLanJoinInfo(info);
+    setLanJoinStatus("connecting");
+    setLanMode("join");
+    setGridSize(info.gridSize ?? 10);
+    const numPlanes = info.numPlanes ?? 3;
+    const diff =
+      info.gridSize <= 8 ? "easy" : info.gridSize <= 10 ? "medium" : "hard";
+    setDifficulty(diff);
+    setPlacementPhase(false);
+    setPlacedPlanes(Array(numPlanes).fill(null));
+    setSelectedPlaneIndex(0);
+    setPlacementRotation(0);
+    setPreviewAt(null);
+    const base = info.joinBaseUrl || baseUrl;
+    if (info.gameId && base) {
+      lanJoining(info.gameId, base, {
+        playerName: (playerName || "Player").trim().slice(0, 20) || "Player",
+      })
+        .then(() => setLanJoinStatus("connected"))
+        .catch(() => setLanJoinStatus("failed"));
+    } else {
+      setLanJoinStatus("connected");
+    }
+  }, [playerName, baseUrl]);
+
+  const handleJoinPlacePlanes = useCallback(() => {
+    if (!lanJoinInfo) return;
+    setPlacementPhase(true);
+  }, [lanJoinInfo]);
+
+  const handleJoinWithRandomPlanes = useCallback(
+    async (info) => {
+      const base = info.joinBaseUrl || baseUrl;
+      if (!info.gameId || !base) return;
+      setJoinLoading(true);
+      try {
+        await lanJoining(info.gameId, base, {
+          playerName: (playerName || "Player").trim().slice(0, 20) || "Player",
+        });
+        const gridSize = info.gridSize ?? 10;
+        const numPlanes = info.numPlanes ?? 3;
+        const planes = generateRandomPlanes(gridSize, numPlanes);
+        if (planes.length !== numPlanes) throw new Error("Could not generate planes");
+        const res = await lanJoin(info.gameId, planes, base, {
+          password: info.joinPassword,
+          playerName: (playerName || "Player").trim().slice(0, 20) || "Player",
+        });
+        lanJoinerBaseUrlRef.current = base;
+        setGameId(res.gameId);
+        setGridSize(res.gridSize ?? info.gridSize);
+        setHits([]);
+        setMisses([]);
+        setIsMatch(true);
+        setIsPlayerTurn(false);
+        setPlacementPhase(false);
+        setPlacedPlanes([]);
+        setPreviewAt(null);
+        setLanJoinInfo(null);
+        setLanJoinStatus(null);
+        setLanPlayerSide(res.playerSide ?? "player2");
+        setLanWaitingForHost(true);
+      } catch (e) {
+        Alert.alert("Error", e.message || "Could not join game");
+      } finally {
+        setJoinLoading(false);
+      }
+    },
+    [baseUrl, playerName],
+  );
+
+  const handleFindLanGame = useCallback(async (serverBaseUrl, code) => {
+    setJoinLoading(true);
+    try {
+      return await lanLookup(code, serverBaseUrl);
+    } finally {
+      setJoinLoading(false);
+    }
+  }, []);
+
+  const handleServerUrlChange = useCallback((url) => {
+    setServerUrlOverride?.(url);
+  }, [setServerUrlOverride]);
 
   const handleConfirmPlace = useCallback(
     (arg) => {
@@ -379,7 +549,8 @@ export default function GameScreen() {
     const planes = placedPlanes
       .filter(Boolean)
       .map((p) => ({ cells: p.cells, head: p.head }));
-    if (planes.length !== placementNumPlanes) return;
+    const numRequired = lanJoinInfo?.numPlanes ?? placementNumPlanes;
+    if (planes.length !== numRequired) return;
     setLoading(true);
     setLastResult(null);
     setSunkPlaneId(null);
@@ -389,28 +560,93 @@ export default function GameScreen() {
     setGaveUp(false);
     setRevealedCells([]);
     setExplodingCell(null);
+    setPlayerPlanesSunk(0);
+    setCpuPlanesSunk(0);
     setSmokeCell(null);
     setTurnSwitchDelay(false);
-    setIsMatch(true);
-    setIsPlayerTurn(true);
     setPlayerBoardHits([]);
     setPlayerBoardMisses([]);
     setPlayerWon(null);
     try {
-      const res = await createGame(difficulty, planes);
-      setGameId(res.gameId);
-      setGridSize(res.gridSize ?? difficultyConfig.gridSize);
-      setHits(res.hits ?? []);
-      setMisses(res.misses ?? []);
-      setPlacementPhase(false);
-      setPlacedPlanes([]);
-      setPreviewAt(null);
+      if (lanJoinInfo) {
+        const joinBase = lanJoinInfo.joinBaseUrl || baseUrl;
+        const res = await lanJoin(lanJoinInfo.gameId, planes, joinBase, {
+          password: lanJoinInfo.joinPassword,
+          playerName: (playerName || "Player").trim().slice(0, 20) || "Player",
+        });
+        lanJoinerBaseUrlRef.current = joinBase;
+        setGameId(res.gameId);
+        setGridSize(res.gridSize ?? lanJoinInfo.gridSize);
+        setHits([]);
+        setMisses([]);
+        setIsMatch(true);
+        setIsPlayerTurn(false);
+        setPlacementPhase(false);
+        setPlacedPlanes([]);
+        setPreviewAt(null);
+        setLanJoinInfo(null);
+        setLanJoinStatus(null);
+        setLanPlayerSide(res.playerSide ?? "player2");
+        setLanWaitingForHost(true);
+      } else if (lanMode === "host") {
+        const serverUrl = baseUrl.replace(/\/$/, "");
+        const cfg = lanHostConfigRef.current ?? lanHostConfig;
+        const res = await createGame(difficulty, planes, {
+          isLanMultiplayer: true,
+          baseUrl: serverUrl,
+          password: cfg?.password,
+          minPlayers: cfg?.minPlayers ?? 2,
+          maxPlayers: cfg?.maxPlayers ?? 2,
+          playerName: (playerName || "Player").trim().slice(0, 20) || "Player",
+        });
+        lanServerUrlRef.current = serverUrl;
+        setGameId(res.gameId);
+        setLanLobbyCode(res.lobbyCode ?? "");
+        setGridSize(res.gridSize ?? difficultyConfig.gridSize);
+        setHits([]);
+        setMisses([]);
+        setIsMatch(true);
+        setLanPlayerSide("player1");
+        setIsPlayerTurn(true);
+        setPlacementPhase(false);
+        setPlacedPlanes([]);
+        setPreviewAt(null);
+        setLanWaitingForOpponent(true);
+        try {
+          const ipRes = await fetch(`${serverUrl}/lan/my-ip`);
+          const ipData = await ipRes.json();
+          setLanHostIp(ipData.ip ?? "");
+        } catch {
+          setLanHostIp("—");
+        }
+      } else {
+        setIsMatch(true);
+        setIsPlayerTurn(true);
+        const res = await createGame(difficulty, planes);
+        setGameId(res.gameId);
+        setGridSize(res.gridSize ?? difficultyConfig.gridSize);
+        setHits(res.hits ?? []);
+        setMisses(res.misses ?? []);
+        setPlacementPhase(false);
+        setPlacedPlanes([]);
+        setPreviewAt(null);
+      }
     } catch (e) {
       Alert.alert("Error", e.message || "Could not start game");
     } finally {
       setLoading(false);
     }
-  }, [difficulty, placedPlanes, placementNumPlanes, difficultyConfig.gridSize]);
+  }, [
+    difficulty,
+    placedPlanes,
+    placementNumPlanes,
+    lanJoinInfo,
+    lanMode,
+    lanHostConfig,
+    difficultyConfig.gridSize,
+    baseUrl,
+    playerName,
+  ]);
 
   const goToMainMenu = useCallback(() => {
     setGameId(null);
@@ -425,6 +661,32 @@ export default function GameScreen() {
     setGaveUp(false);
     setRevealedCells([]);
     setExplodingCell(null);
+    setPlayerPlanesSunk(0);
+    setCpuPlanesSunk(0);
+    setLanMode(null);
+    setLanPlayerSide(null);
+    setLanLobbyCode("");
+    setLanHostIp("");
+    setLanWaitingForOpponent(false);
+    setLanJoinInfo(null);
+    setLanJoinStatus(null);
+    setLanConnectionLost(false);
+    setLanHostReadySent(false);
+    setLanJoinerReadySent(false);
+    setLanJoinerReadyFromServer(false);
+    setLanWaitingForHost(false);
+    setLanHostReadyFromServer(false);
+    lanJoinerBaseUrlRef.current = null;
+    setLanJoiningPlayer(null);
+    setLanConnectedPlayerName(null);
+    setLanOpponentName(null);
+    setLanOpponents([]);
+    setSelectedTargetId(null);
+    setShowLanHostSetup(false);
+    setLanHostConfig({ password: null, minPlayers: 2, maxPlayers: 2 });
+    resetServerUrl?.();
+    setPlayerPlanesSunk(0);
+    setCpuPlanesSunk(0);
     setSmokeCell(null);
     setTurnSwitchDelay(false);
     setIsMatch(false);
@@ -433,6 +695,8 @@ export default function GameScreen() {
     setPlayerBoardMisses([]);
     setPlayerWon(null);
     setShowVersusScreen(false);
+    setVersusTurnName("");
+    lastTurnSwitchAtShownRef.current = 0;
   }, []);
 
   const handleGiveUp = useCallback(() => {
@@ -447,7 +711,10 @@ export default function GameScreen() {
         style: "destructive",
         onPress: async () => {
           try {
-            const { planeCells } = await giveUpApi(gameId);
+            const { planeCells } = await giveUpApi(gameId, {
+              playerSide: lanPlayerSide || undefined,
+              baseUrl: lanPlayerSide ? baseUrl : undefined,
+            });
             setRevealedCells(planeCells || []);
             setGaveUp(true);
           } catch (e) {
@@ -465,18 +732,23 @@ export default function GameScreen() {
         },
       },
     ]);
-  }, [gameId, goToMainMenu]);
+  }, [gameId, goToMainMenu, lanPlayerSide, baseUrl]);
 
   const handleCellPress = useCallback(
     async (row, col) => {
       if (!gameId || gameOver || loading || cooldownRemaining > 0) return;
       if (turnSwitchDelay) return;
       if (isMatch && !isPlayerTurn) return;
+      if (lanPlayerSide && lanOpponents.length > 1 && !selectedTargetId) return;
       setLoading(true);
       setLastResult(null);
       setSunkPlaneId(null);
       try {
-        const res = await shoot(gameId, row, col);
+        const res = await shoot(gameId, row, col, {
+          playerSide: lanPlayerSide || undefined,
+          targetPlayer: lanOpponents.length ? (selectedTargetId || lanOpponents[0]?.id) : undefined,
+          baseUrl: lanPlayerSide ? baseUrl : undefined,
+        });
         setHits(res.hits ?? hits);
         setMisses(res.misses ?? misses);
         setLastResult(res.result);
@@ -484,12 +756,17 @@ export default function GameScreen() {
         if (res.isPlayerTurn !== undefined) {
           if (res.result === "miss") {
             setTurnSwitchDelay(true);
-            setVersusLeftName("CPU");
+            const nextTurn = res.nextTurnName ?? (lanPlayerSide ? (lanOpponentName || "Opponent") : "CPU");
+            setVersusLeftName(nextTurn);
             setVersusRightName((playerName || "Player1").trim() || "Player1");
+            setVersusTurnName(nextTurn);
             if (versusTimeoutRef.current)
               clearTimeout(versusTimeoutRef.current);
             if (turnSwitchTimeoutRef.current)
               clearTimeout(turnSwitchTimeoutRef.current);
+            const delayMs = res.turnSwitchAt
+              ? Math.max(0, res.turnSwitchAt + 2000 - Date.now())
+              : 2000;
             versusTimeoutRef.current = setTimeout(() => {
               setShowVersusScreen(true);
               turnSwitchTimeoutRef.current = setTimeout(() => {
@@ -497,11 +774,13 @@ export default function GameScreen() {
                 setTurnSwitchDelay(false);
                 setShowVersusScreen(false);
               }, 2000);
-            }, 2000);
+            }, delayMs);
           } else {
             setIsPlayerTurn(res.isPlayerTurn);
           }
         }
+        if (res.result === "sunk")
+          setPlayerPlanesSunk((n) => n + 1);
         if (res.gameOver) {
           setGameOver(true);
           setPlayerWon(true);
@@ -522,6 +801,16 @@ export default function GameScreen() {
             () => setExplodingCell(null),
             500,
           );
+          const tid = lanOpponents.length ? (selectedTargetId || lanOpponents[0]?.id) : null;
+          if (tid) {
+            setLanOpponents((prev) =>
+              prev.map((o) =>
+                o.id === tid
+                  ? { ...o, hits: [...(o.hits ?? []), { row, col }] }
+                  : o
+              )
+            );
+          }
         } else if (res.result === "miss") {
           try {
             missPlayer.seekTo(0);
@@ -532,6 +821,16 @@ export default function GameScreen() {
           setSmokeCell({ row, col });
           if (smokeTimeoutRef.current) clearTimeout(smokeTimeoutRef.current);
           smokeTimeoutRef.current = setTimeout(() => setSmokeCell(null), 800);
+          const tid = lanOpponents.length ? (selectedTargetId || lanOpponents[0]?.id) : null;
+          if (tid) {
+            setLanOpponents((prev) =>
+              prev.map((o) =>
+                o.id === tid
+                  ? { ...o, misses: [...(o.misses ?? []), { row, col }] }
+                  : o
+              )
+            );
+          }
         }
         if (res.cooldownRemaining != null)
           setCooldownRemaining(res.cooldownRemaining);
@@ -564,8 +863,128 @@ export default function GameScreen() {
       isMatch,
       isPlayerTurn,
       playerName,
+      lanPlayerSide,
+      lanOpponentName,
+      lanOpponents,
+      selectedTargetId,
+      baseUrl,
     ],
   );
+
+  useEffect(() => {
+    if (!gameId || !lanWaitingForOpponent || !lanPlayerSide || lanConnectionLost) return;
+    const url = lanServerUrlRef.current || baseUrl;
+    const poll = async () => {
+      try {
+        const s = await lanStatus(gameId, lanPlayerSide, url);
+        setLanJoiningPlayer(s.joiningPlayer || null);
+        setLanConnectedPlayerName(s.connectedPlayerName || null);
+        setLanJoinerReadyFromServer(!!s.joinerReady);
+        if (s.allPlayers) setLanAllPlayers(s.allPlayers);
+        if (s.player2Ready && s.status === "playing" && lanHostReadySent && s.joinerReady) {
+          setLanOpponentName(s.opponentName || s.connectedPlayerName || "Opponent");
+          setLanOpponents(s.opponents ?? []);
+          setSelectedTargetId((prev) => prev || s.opponents?.[0]?.id);
+          setLanWaitingForOpponent(false);
+        }
+      } catch (e) {
+        if (e?.status === 404) {
+          setLanConnectionLost(true);
+        }
+      }
+    };
+    poll();
+    const id = setInterval(poll, 1500);
+    return () => clearInterval(id);
+  }, [gameId, lanWaitingForOpponent, lanPlayerSide, lanConnectionLost, lanHostReadySent, baseUrl]);
+
+  useEffect(() => {
+    if (!gameId || !lanWaitingForHost || !lanPlayerSide || lanPlayerSide === "player1") return;
+    const url = lanJoinerBaseUrlRef.current || baseUrl;
+    const poll = async () => {
+      try {
+        const s = await lanStatus(gameId, lanPlayerSide, url);
+        setLanHostReadyFromServer(!!s.hostReady);
+        if (s.allPlayers) setLanAllPlayers(s.allPlayers);
+        if (s.opponentName) setLanOpponentName(s.opponentName);
+        if (s.status === "playing") {
+          setLanWaitingForHost(false);
+        }
+      } catch {}
+    };
+    poll();
+    const id = setInterval(poll, 800);
+    return () => clearInterval(id);
+  }, [gameId, lanWaitingForHost, lanPlayerSide, lanJoinerReadySent, baseUrl]);
+
+  useEffect(() => {
+    if (
+      !gameId ||
+      !lanPlayerSide ||
+      isPlayerTurn ||
+      gameOver ||
+      gaveUp ||
+      loading ||
+      turnSwitchDelay ||
+      lanWaitingForHost
+    )
+      return;
+    const poll = async () => {
+      try {
+        const s = await lanStatus(gameId, lanPlayerSide, baseUrl);
+        if (s.opponentName) setLanOpponentName(s.opponentName);
+        if (s.opponents) {
+          setLanOpponents(s.opponents);
+          setSelectedTargetId((prev) => {
+            const valid = s.opponents?.some((o) => o.id === prev);
+            return valid ? prev : s.opponents?.[0]?.id ?? prev;
+          });
+        }
+        if (s.currentTurnName) setLanCurrentTurnName(s.currentTurnName);
+        if (s.currentTurn) setLanCurrentTurnId(s.currentTurn);
+        setPlayerBoardHits(s.myBoardHits ?? []);
+        setPlayerBoardMisses(s.myBoardMisses ?? []);
+        if (s.turnSwitchAt && s.isMyTurn && lastTurnSwitchAtShownRef.current !== s.turnSwitchAt) {
+          lastTurnSwitchAtShownRef.current = s.turnSwitchAt;
+          setTurnSwitchDelay(true);
+          setVersusLeftName(s.opponentName || "Opponent");
+          setVersusRightName((playerName || "Player1").trim() || "Player1");
+          setVersusTurnName((playerName || "Player1").trim() || "Player1");
+          const delayMs = Math.max(0, s.turnSwitchAt + 2000 - Date.now());
+          if (versusTimeoutRef.current) clearTimeout(versusTimeoutRef.current);
+          if (turnSwitchTimeoutRef.current) clearTimeout(turnSwitchTimeoutRef.current);
+          versusTimeoutRef.current = setTimeout(() => {
+            setShowVersusScreen(true);
+            turnSwitchTimeoutRef.current = setTimeout(() => {
+              setIsPlayerTurn(true);
+              setTurnSwitchDelay(false);
+              setShowVersusScreen(false);
+            }, 2000);
+          }, delayMs);
+        }
+        if (!s.turnSwitchAt || !s.isMyTurn || lastTurnSwitchAtShownRef.current !== s.turnSwitchAt) {
+          setIsPlayerTurn(s.isMyTurn);
+        }
+        if (s.gameOver) {
+          setGameOver(true);
+          setPlayerWon(s.winner === lanPlayerSide);
+        }
+      } catch {}
+    };
+    const id = setInterval(poll, 800);
+    return () => clearInterval(id);
+  }, [
+    gameId,
+    lanPlayerSide,
+    isPlayerTurn,
+    gameOver,
+    gaveUp,
+    loading,
+    turnSwitchDelay,
+    lanWaitingForHost,
+    baseUrl,
+    playerName,
+  ]);
 
   useEffect(() => {
     if (
@@ -575,7 +994,8 @@ export default function GameScreen() {
       gameOver ||
       gaveUp ||
       loading ||
-      turnSwitchDelay
+      turnSwitchDelay ||
+      lanPlayerSide
     )
       return;
     const t = setTimeout(async () => {
@@ -588,10 +1008,14 @@ export default function GameScreen() {
           setGameOver(true);
           setPlayerWon(false);
           setIsPlayerTurn(res.isPlayerTurn ?? true);
-        } else if (res.result === "miss") {
+        } else if (res.result === "sunk") {
+          setCpuPlanesSunk((n) => n + 1);
+        }
+        if (res.result === "miss") {
           setTurnSwitchDelay(true);
           setVersusLeftName((playerName || "Player1").trim() || "Player1");
           setVersusRightName("CPU");
+          setVersusTurnName((playerName || "Player1").trim() || "Player1");
           if (versusTimeoutRef.current) clearTimeout(versusTimeoutRef.current);
           if (turnSwitchTimeoutRef.current)
             clearTimeout(turnSwitchTimeoutRef.current);
@@ -676,14 +1100,27 @@ export default function GameScreen() {
   const accuracy = shots > 0 ? Math.round((hits.length / shots) * 100) : 0;
   const effCol = Math.min(selectedCol, gridSize - 1);
   const effRow = Math.min(selectedRow, gridSize - 1);
+  const selectedTarget = lanOpponents.find((o) => o.id === selectedTargetId) || lanOpponents[0];
+  const targetHits = selectedTarget?.hits ?? hits;
+  const targetMisses = selectedTarget?.misses ?? misses;
+  const checkHits = lanOpponents.length ? targetHits : hits;
+  const checkMisses = lanOpponents.length ? targetMisses : misses;
   const coordCellShot =
-    hits.some((h) => h.row === effRow && h.col === effCol) ||
-    misses.some((m) => m.row === effRow && m.col === effCol) ||
+    checkHits.some((h) => h.row === effRow && h.col === effCol) ||
+    checkMisses.some((m) => m.row === effRow && m.col === effCol) ||
     revealedCells?.some((c) => c.row === effRow && c.col === effCol);
   const highlightCell = !coordCellShot ? { row: effRow, col: effCol } : null;
-  const gridHits = isMatch && !isPlayerTurn ? playerBoardHits : hits;
-  const gridMisses = isMatch && !isPlayerTurn ? playerBoardMisses : misses;
+  const gridHits = isMatch && !isPlayerTurn ? playerBoardHits : (lanOpponents.length ? targetHits : hits);
+  const gridMisses = isMatch && !isPlayerTurn ? playerBoardMisses : (lanOpponents.length ? targetMisses : misses);
   const gridRevealed = isMatch && !isPlayerTurn ? revealedCells : [];
+  const effectiveGridHits =
+    explodingCell && !gridHits.some((h) => h.row === explodingCell.row && h.col === explodingCell.col)
+      ? [...gridHits, { row: explodingCell.row, col: explodingCell.col }]
+      : gridHits;
+  const effectiveGridMisses =
+    smokeCell && !gridMisses.some((m) => m.row === smokeCell.row && m.col === smokeCell.col)
+      ? [...gridMisses, { row: smokeCell.row, col: smokeCell.col }]
+      : gridMisses;
   const effectiveIsPlayerTurn = isMatch
     ? isPlayerTurn
     : !loading && cooldownRemaining === 0 && !gameOver && !gaveUp;
@@ -698,12 +1135,21 @@ export default function GameScreen() {
 
   const mapOption = MAP_OPTIONS.find((m) => m.id === mapId);
   const isMainMenu = !gameId && !placementPhase;
+  const isVideoMap = !!mapOption?.video;
   const Wrapper =
-    isMainMenu ? View : mapId === "default" ? View : ImageBackground;
+    isMainMenu
+      ? View
+      : mapId === "default"
+        ? View
+        : isVideoMap
+          ? VideoMapBackground
+          : ImageBackground;
   const wrapperProps =
     isMainMenu || mapId === "default"
       ? {}
-      : { source: mapOption?.image, style: { flex: 1 } };
+      : isVideoMap
+        ? { source: mapOption.video, style: { flex: 1 } }
+        : { source: mapOption?.image, style: { flex: 1 } };
   const insets = useSafeAreaInsets();
 
   const handleCoordShoot = useCallback(() => {
@@ -740,6 +1186,48 @@ export default function GameScreen() {
               },
             ]}
           >
+            {lanJoinInfo && lanJoinStatus && (
+              <View
+                style={[
+                  styles.lanJoinBanner,
+                  lanJoinStatus === "connected" && styles.lanJoinBannerConnected,
+                  lanJoinStatus === "failed" && styles.lanJoinBannerFailed,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.lanJoinBannerDot,
+                    lanJoinStatus === "connected" && styles.lanJoinBannerDotConnected,
+                    lanJoinStatus === "failed" && styles.lanJoinBannerDotFailed,
+                  ]}
+                />
+                <Text style={styles.lanJoinBannerText}>
+                  {lanJoinStatus === "connecting"
+                    ? "Connecting to game..."
+                    : lanJoinStatus === "connected"
+                      ? "Connected. Place your planes."
+                      : "Failed to connect. Check network."}
+                </Text>
+                {lanJoinStatus === "failed" && (
+                  <SoundPressable
+                    style={({ pressed }) => [
+                      styles.lanJoinRetryBtn,
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => {
+                      setLanJoinStatus("connecting");
+                      lanJoining(lanJoinInfo.gameId, lanJoinInfo.joinBaseUrl || baseUrl, {
+                        playerName: (playerName || "Player").trim().slice(0, 20) || "Player",
+                      })
+                        .then(() => setLanJoinStatus("connected"))
+                        .catch(() => setLanJoinStatus("failed"));
+                    }}
+                  >
+                    <Text style={styles.lanJoinRetryText}>Retry</Text>
+                  </SoundPressable>
+                )}
+              </View>
+            )}
             <PlacementPhase
               selectedPlaneIndex={selectedPlaneIndex}
               onSelectPlane={handleSelectPlane}
@@ -765,9 +1253,18 @@ export default function GameScreen() {
               placementPreviewCells={placementPreviewCells}
               placementPreviewValid={placementPreviewValid}
               allPlaced={allPlaced}
-              onBack={() => setPlacementPhase(false)}
+              onBack={() => {
+                setPlacementPhase(false);
+                if (lanJoinInfo) {
+                  setLanJoinInfo(null);
+                  setLanJoinStatus(null);
+                }
+              }}
               onStartGame={startGameFromPlacement}
               loading={loading}
+              startButtonLabel={
+                lanJoinInfo ? "Join game" : lanMode === "host" ? "Host game" : "Start game"
+              }
             />
           </View>
           {dockDragPosition && (
@@ -801,6 +1298,26 @@ export default function GameScreen() {
             </View>
           )}
         </>
+      ) : showLanHostSetup ? (
+        <View
+          style={[
+            styles.scroll,
+            styles.mainMenuWrapper,
+            {
+              paddingTop: 20 + insets.top,
+              paddingBottom: 40 + insets.bottom,
+            },
+          ]}
+        >
+          <LanHostSetup
+            onContinue={handleLanHostSetupContinue}
+            onBack={() => setShowLanHostSetup(false)}
+            password={lanHostConfig?.password ?? ""}
+            minPlayers={lanHostConfig?.minPlayers ?? 2}
+            maxPlayers={lanHostConfig?.maxPlayers ?? 2}
+            onConfigChange={setLanHostConfig}
+          />
+        </View>
       ) : !gameId ? (
         <View
           style={[
@@ -828,22 +1345,168 @@ export default function GameScreen() {
             loading={loading}
             onNewGame={startNewGame}
             onPlacePlanes={startPlacementPhase}
+            lanMode={lanMode}
+            onLanModeChange={(mode) => {
+              setLanMode(mode);
+              if (mode === null) {
+                setLanJoinInfo(null);
+                setLanJoinStatus(null);
+              }
+            }}
+            onHostLan={startHostLan}
+            onJoinLanFound={handleJoinLanFound}
+            onJoinPlacePlanes={handleJoinPlacePlanes}
+            onJoinWithRandomPlanes={handleJoinWithRandomPlanes}
+            onFindLanGame={handleFindLanGame}
+            onServerUrlChange={handleServerUrlChange}
+            joinLoading={joinLoading}
+            lanJoinInfo={lanJoinInfo}
+            baseUrl={baseUrl}
           />
+        </View>
+      ) : lanWaitingForOpponent ? (
+        <View
+          style={[
+            styles.scroll,
+            styles.mainMenuWrapper,
+            {
+              paddingTop: 20 + insets.top,
+              paddingBottom: 40 + insets.bottom,
+            },
+          ]}
+        >
+          {lanConnectionLost ? (
+            <View style={styles.lanErrorWrap}>
+              <Text style={styles.lanErrorTitle}>Session lost</Text>
+              <Text style={styles.lanErrorText}>
+                The server may have restarted. Start the server first, then create a new game.
+              </Text>
+              <SoundPressable
+                style={({ pressed }) => [
+                  styles.lobbyCancelBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={goToMainMenu}
+              >
+                <Text style={styles.lobbyCancelBtnText}>Back to menu</Text>
+              </SoundPressable>
+            </View>
+          ) : (
+            <>
+              <LanHostLobby
+                lobbyCode={lanLobbyCode}
+                hostIp={lanHostIp}
+                hostName={(playerName || "You").trim() || "You"}
+                maxPlayers={lanHostConfig?.maxPlayers ?? 2}
+                joiningPlayer={lanJoiningPlayer}
+                connectedPlayerName={lanConnectedPlayerName}
+                allPlayers={lanAllPlayers}
+                joinerReady={lanJoinerReadyFromServer}
+                hostReady={lanHostReadySent}
+                onHostReady={async () => {
+                  setLanHostReadySent(true);
+                  try {
+                    const url = lanServerUrlRef.current || baseUrl;
+                    await lanHostReady(gameId, url);
+                    const s = await lanStatus(gameId, lanPlayerSide, url);
+                    if (s.player2Ready && s.status === "playing" && s.joinerReady) {
+                      setLanOpponentName(s.opponentName || s.connectedPlayerName || "Opponent");
+                      setLanOpponents(s.opponents ?? []);
+                      setSelectedTargetId((prev) => prev || s.opponents?.[0]?.id);
+                      setLanWaitingForOpponent(false);
+                    }
+                  } catch (e) {
+                    setLanHostReadySent(false);
+                    const msg = e?.status === 404
+                      ? "Game session lost. The server may have restarted. Create a new game."
+                      : (e.message || "Could not set ready");
+                    Alert.alert("Error", msg);
+                  }
+                }}
+              />
+              <SoundPressable
+                style={({ pressed }) => [
+                  styles.lobbyCancelBtn,
+                  pressed && { opacity: 0.8 },
+                ]}
+                onPress={goToMainMenu}
+              >
+                <Text style={styles.lobbyCancelBtnText}>Cancel</Text>
+              </SoundPressable>
+            </>
+          )}
+        </View>
+      ) : lanWaitingForHost ? (
+        <View
+          style={[
+            styles.scroll,
+            styles.mainMenuWrapper,
+            {
+              paddingTop: 20 + insets.top,
+              paddingBottom: 40 + insets.bottom,
+            },
+          ]}
+        >
+          <LanHostLobby
+            isJoiner
+            hostName={(playerName || "You").trim() || "You"}
+            maxPlayers={lanJoinInfo?.maxPlayers ?? 2}
+            allPlayers={lanAllPlayers}
+            hostReady={lanHostReadyFromServer}
+            joinerReady={lanJoinerReadySent}
+            onJoinerReady={async () => {
+              setLanJoinerReadySent(true);
+              try {
+                const url = lanJoinerBaseUrlRef.current || baseUrl;
+                await lanJoinerReady(gameId, url, { playerSide: lanPlayerSide });
+                const s = await lanStatus(gameId, lanPlayerSide, url);
+                if (s.status === "playing") {
+                  if (s.opponents) {
+                    setLanOpponents(s.opponents);
+                    setSelectedTargetId((prev) => prev || s.opponents?.[0]?.id);
+                  }
+                  if (s.currentTurn) setLanCurrentTurnId(s.currentTurn);
+                  if (s.currentTurnName) setLanCurrentTurnName(s.currentTurnName);
+                  setIsPlayerTurn(s.isMyTurn ?? false);
+                  setPlayerBoardHits(s.myBoardHits ?? []);
+                  setPlayerBoardMisses(s.myBoardMisses ?? []);
+                  setLanWaitingForHost(false);
+                }
+              } catch (e) {
+                setLanJoinerReadySent(false);
+                const msg = e?.status === 404
+                  ? "Game session lost. The server may have restarted. Create a new game."
+                  : (e.message || "Could not set ready");
+                Alert.alert("Error", msg);
+              }
+            }}
+          />
+          <SoundPressable
+            style={({ pressed }) => [
+              styles.lobbyCancelBtn,
+              pressed && { opacity: 0.8 },
+            ]}
+            onPress={goToMainMenu}
+          >
+            <Text style={styles.lobbyCancelBtnText}>Cancel</Text>
+          </SoundPressable>
         </View>
       ) : showVersusScreen ? (
         <View style={styles.gameView}>
           {mapId === "default" && <MathPaperBackground gridSize={gridSize} />}
           <VersusScreen
+            turnName={versusTurnName}
             leftName={versusLeftName}
             rightName={versusRightName}
-            mapImage={mapOption?.image}
+            mapImage={mapOption?.video ? null : mapOption?.image}
+            mapVideo={mapOption?.video}
           />
         </View>
       ) : (
         <View style={styles.gameView}>
           <GamePhase
             gameMode={gameMode}
-            numPlayers={numPlayers}
+            numPlayers={lanOpponents?.length ? lanOpponents.length + 1 : numPlayers}
             playerName={playerName}
             isPlayerTurn={effectiveIsPlayerTurn}
             gaveUp={gaveUp}
@@ -851,7 +1514,7 @@ export default function GameScreen() {
             playerWon={playerWon}
             elapsed={elapsed}
             shots={shots}
-            hits={gridHits}
+            hits={effectiveGridHits}
             accuracy={accuracy}
             lastResult={lastResult}
             sunkPlaneId={sunkPlaneId}
@@ -859,26 +1522,59 @@ export default function GameScreen() {
             onGiveUp={handleGiveUp}
             onMainMenu={goToMainMenu}
             gridSize={gridSize}
-            misses={gridMisses}
+            misses={effectiveGridMisses}
             revealedCells={gridRevealed}
             carouselHits={
-              isMatch ? (isPlayerTurn ? playerBoardHits : hits) : undefined
+              isMatch
+                ? isPlayerTurn
+                  ? playerBoardHits
+                  : (lanOpponents.find((o) => o.id === lanCurrentTurnId)?.hits ?? [])
+                : undefined
             }
             carouselMisses={
-              isMatch ? (isPlayerTurn ? playerBoardMisses : misses) : undefined
+              isMatch
+                ? isPlayerTurn
+                  ? playerBoardMisses
+                  : (lanOpponents.find((o) => o.id === lanCurrentTurnId)?.misses ?? [])
+                : undefined
             }
             carouselRevealed={
-              isMatch ? (isPlayerTurn ? revealedCells : []) : undefined
+              isMatch ? (isPlayerTurn ? [] : []) : undefined
             }
             carouselLabel={
               isMatch
                 ? isPlayerTurn
                   ? (playerName || "Player1").trim() || "Player1"
-                  : "CPU"
+                  : (lanCurrentTurnName || lanOpponents.find((o) => o.id === lanCurrentTurnId)?.name || "Opponent")
                 : undefined
             }
-            attackShots={isMatch ? hits.length + misses.length : undefined}
-            attackHits={isMatch ? hits.length : undefined}
+            carouselItems={
+              isMatch && isPlayerTurn && lanOpponents?.length > 1
+                ? lanOpponents.map((o) => ({
+                    id: o.id,
+                    name: o.name,
+                    label: o.name,
+                    hits: o.hits ?? [],
+                    misses: o.misses ?? [],
+                  }))
+                : undefined
+            }
+            selectedTargetId={isMatch && isPlayerTurn ? selectedTargetId : undefined}
+            onSelectTarget={isMatch && isPlayerTurn ? setSelectedTargetId : undefined}
+            attackShots={
+              isMatch
+                ? lanOpponents.length
+                  ? (selectedTarget?.hits?.length ?? 0) + (selectedTarget?.misses?.length ?? 0)
+                  : hits.length + misses.length
+                : undefined
+            }
+            attackHits={
+              isMatch
+                ? lanOpponents.length
+                  ? (selectedTarget?.hits?.length ?? 0)
+                  : hits.length
+                : undefined
+            }
             onCellPress={handleCellPress}
             gridDisabled={
               loading ||
@@ -907,6 +1603,16 @@ export default function GameScreen() {
             }
             onPadTouchStart={() => setScrollEnabled(false)}
             onPadTouchEnd={() => setScrollEnabled(true)}
+            opponentShots={playerBoardHits.length + playerBoardMisses.length}
+            opponentHits={playerBoardHits.length}
+            opponentName={
+              lanPlayerSide
+                ? (lanCurrentTurnName || lanOpponentName || "Opponent")
+                : "CPU"
+            }
+            numPlanes={difficultyConfig.numPlanes}
+            playerPlanesSunk={playerPlanesSunk}
+            cpuPlanesSunk={cpuPlanesSunk}
           />
         </View>
       )}
@@ -942,5 +1648,88 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
     textAlign: "center",
+  },
+  lanJoinBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(251, 191, 36, 0.2)",
+    borderRadius: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "rgba(251, 191, 36, 0.4)",
+  },
+  lanJoinBannerConnected: {
+    backgroundColor: "rgba(74, 222, 128, 0.2)",
+    borderColor: "rgba(74, 222, 128, 0.4)",
+  },
+  lanJoinBannerFailed: {
+    backgroundColor: "rgba(248, 113, 113, 0.2)",
+    borderColor: "rgba(248, 113, 113, 0.4)",
+  },
+  lanJoinBannerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#fbbf24",
+  },
+  lanJoinBannerDotConnected: {
+    backgroundColor: "#4ade80",
+  },
+  lanJoinBannerDotFailed: {
+    backgroundColor: "#f87171",
+  },
+  lanJoinBannerText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: UI_WHITE,
+    flex: 1,
+  },
+  lanJoinRetryBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 8,
+  },
+  lanJoinRetryText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: UI_WHITE,
+  },
+  lanErrorWrap: {
+    padding: 24,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    borderRadius: 16,
+    alignItems: "center",
+    maxWidth: 340,
+    borderWidth: 2,
+    borderColor: "rgba(198, 40, 40, 0.5)",
+  },
+  lanErrorTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#f87171",
+    marginBottom: 8,
+  },
+  lanErrorText: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  lobbyCancelBtn: {
+    marginTop: 24,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    backgroundColor: UI_PAGE_BG,
+    alignItems: "center",
+  },
+  lobbyCancelBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: UI_PRIMARY,
   },
 });

@@ -8,11 +8,13 @@ import {
   TouchableWithoutFeedback,
   useWindowDimensions,
 } from "react-native";
+import Slider from "@react-native-community/slider";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatTime } from "../utils/format";
 import Grid from "./Grid";
 import CoordPicker from "./CoordPicker";
 import OpponentBoardCarousel from "./OpponentBoardCarousel";
+import SoundPressable from "./SoundPressable";
 import {
   UI_PRIMARY,
   UI_WHITE,
@@ -20,6 +22,7 @@ import {
   UI_DANGER,
   UI_BODY_MUTED,
 } from "../constants/constants";
+import { useSoundSettings } from "../contexts/SoundSettingsContext";
 
 const styles = StyleSheet.create({
   turnBar: {
@@ -72,25 +75,29 @@ const styles = StyleSheet.create({
     backgroundColor: UI_WHITE,
   },
   feedbackSlot: { minHeight: 20, marginBottom: 4 },
-  gaveUpText: { fontSize: 14, color: UI_BODY_MUTED },
   win: { fontSize: 16, fontWeight: "600", color: UI_SUCCESS },
   lose: { fontSize: 16, fontWeight: "600", color: UI_DANGER },
-  gameOverCard: {
-    backgroundColor: "rgba(255,255,255,0.98)",
+  gameOverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  gameOverPanel: {
+    backgroundColor: "rgba(0,0,0,0.85)",
     borderRadius: 16,
     padding: 24,
-    marginBottom: 12,
-    borderWidth: 3,
-    borderColor: UI_SUCCESS,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    width: "100%",
+    maxWidth: 360,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.15)",
   },
   gameOverCardLose: {
     borderColor: UI_DANGER,
+  },
+  gameOverCardWin: {
+    borderColor: UI_SUCCESS,
   },
   congratsText: {
     fontSize: 24,
@@ -98,22 +105,110 @@ const styles = StyleSheet.create({
     color: UI_SUCCESS,
     marginBottom: 6,
   },
+  loseTitleTextOverlay: {
+    fontSize: 24,
+    fontWeight: "800",
+    color: UI_DANGER,
+    marginBottom: 6,
+  },
+  gaveUpTextOverlay: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: UI_WHITE,
+    marginBottom: 6,
+  },
   winnerNameText: {
     fontSize: 20,
     fontWeight: "700",
-    color: UI_PRIMARY,
+    color: UI_WHITE,
     marginBottom: 12,
   },
-  gameOverStats: {
+  gameOverStatsOverlay: {
     fontSize: 14,
     fontWeight: "600",
-    color: UI_BODY_MUTED,
+    color: "rgba(255,255,255,0.8)",
   },
-  loseTitleText: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: UI_DANGER,
+  scoreboard: {
+    width: "100%",
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.2)",
+    paddingTop: 16,
+  },
+  scoreboardRow: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  scoreboardRowHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 4,
+  },
+  scoreboardRowPlayer: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+  },
+  scoreboardRowOpponent: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  scoreboardRowWinner: {
+    borderWidth: 2,
+    borderColor: UI_SUCCESS,
+  },
+  scoreboardRowLoser: {
+    opacity: 0.85,
+  },
+  scoreboardName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: UI_WHITE,
+  },
+  scoreboardStats: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.75)",
+  },
+  scoreboardPlanes: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.65)",
+    marginTop: 2,
+  },
+  gameOverMainMenuBtn: {
+    marginTop: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    backgroundColor: UI_PRIMARY,
+    alignItems: "center",
+    alignSelf: "stretch",
+  },
+  gameOverMainMenuBtnText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: UI_WHITE,
+  },
+  scoreboardBadge: {
+    fontSize: 12,
+    fontWeight: "800",
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    overflow: "hidden",
+  },
+  scoreboardBadgeWin: {
+    backgroundColor: UI_SUCCESS,
+    color: UI_WHITE,
+  },
+  scoreboardBadgeLose: {
+    backgroundColor: UI_DANGER,
+  },
+  scoreboardBadgeText: {
+    color: UI_WHITE,
+    fontWeight: "800",
+    fontSize: 12,
   },
   feedback: { fontSize: 16, fontWeight: "600", color: UI_BODY_MUTED },
   turnBarMenu: {
@@ -133,6 +228,48 @@ const styles = StyleSheet.create({
     color: UI_WHITE,
   },
   menuItemTextDanger: { color: UI_DANGER },
+  soundSection: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.2)",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  soundSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: UI_WHITE,
+    marginBottom: 10,
+  },
+  soundRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  soundLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "rgba(255,255,255,0.9)",
+    width: 100,
+  },
+  soundSlider: {
+    flex: 1,
+    height: 24,
+  },
+  soundMuteBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    marginLeft: 8,
+  },
+  soundMuteBtnActive: {
+    backgroundColor: UI_DANGER,
+  },
+  soundMuteBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: UI_WHITE,
+  },
   menuOverlayWrap: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -210,6 +347,9 @@ export default function GamePhase({
   carouselMisses,
   carouselRevealed,
   carouselLabel,
+  carouselItems,
+  selectedTargetId,
+  onSelectTarget,
   onCellPress,
   gridDisabled,
   mapBackground,
@@ -226,6 +366,12 @@ export default function GamePhase({
   coordDisabled,
   onPadTouchStart,
   onPadTouchEnd,
+  opponentShots,
+  opponentHits,
+  opponentName = "CPU",
+  numPlanes,
+  playerPlanesSunk,
+  cpuPlanesSunk,
 }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
@@ -245,6 +391,16 @@ export default function GamePhase({
           : null;
 
   const closeMenu = () => setMenuOpen(false);
+  const {
+    soundEffectsVolume,
+    soundEffectsMuted,
+    battleMusicVolume,
+    battleMusicMuted,
+    setSoundEffectsVolume,
+    setSoundEffectsMuted,
+    setBattleMusicVolume,
+    setBattleMusicMuted,
+  } = useSoundSettings();
   const handleGiveUpPress = () => {
     closeMenu();
     onGiveUp();
@@ -264,7 +420,7 @@ export default function GamePhase({
   } else if (isPlayerTurn) {
     turnLabel = `${name}'s turn`;
   } else {
-    turnLabel = "CPU turn";
+    turnLabel = `${opponentName}'s turn`;
     turnStyle = [styles.turnBar, styles.turnBarCpu];
     turnTextStyle = [styles.turnBarText, styles.turnBarCpuText];
   }
@@ -308,31 +464,7 @@ export default function GamePhase({
             )}
           </View>
         </View>
-        <View style={styles.feedbackSlot}>
-          {gaveUp ? (
-            <Text style={styles.gaveUpText}>You gave up — planes revealed</Text>
-          ) : gameOver ? (
-            playerWon === false ? (
-              <View
-                style={[
-                  styles.gameOverCard,
-                  styles.gameOverCardLose,
-                ]}
-              >
-                <Text style={styles.loseTitleText}>Game over</Text>
-                <Text style={styles.gameOverStats}>CPU wins</Text>
-              </View>
-            ) : (
-              <View style={styles.gameOverCard}>
-                <Text style={styles.congratsText}>Congrats!</Text>
-                <Text style={styles.winnerNameText}>{name} wins!</Text>
-                <Text style={styles.gameOverStats}>
-                  Time: {formatTime(elapsed)} · Accuracy: {accuracy}%
-                </Text>
-              </View>
-            )
-          ) : null}
-        </View>
+        <View style={styles.feedbackSlot} />
         <Grid
           gridSize={gridSize}
           hits={hits}
@@ -355,9 +487,134 @@ export default function GamePhase({
             gameMode={gameMode}
             numPlayers={numPlayers}
             carouselLabel={carouselLabel}
+            carouselItems={carouselItems}
+            selectedTargetId={selectedTargetId}
+            onSelectTarget={onSelectTarget}
           />
         </View>
       </ScrollView>
+      {(gameOver || gaveUp) && (
+        <View style={styles.gameOverOverlay} pointerEvents="box-none">
+          <View
+            style={[
+              styles.gameOverPanel,
+              gaveUp || playerWon === false
+                ? styles.gameOverCardLose
+                : styles.gameOverCardWin,
+            ]}
+          >
+            {gaveUp ? (
+              <Text style={styles.gaveUpTextOverlay}>
+                You gave up — planes revealed
+              </Text>
+            ) : playerWon === false ? (
+              <>
+                <Text style={styles.loseTitleTextOverlay}>Game over</Text>
+                <Text style={styles.gameOverStatsOverlay}>{opponentName} wins</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.congratsText}>Congrats!</Text>
+                <Text style={styles.winnerNameText}>{name} wins!</Text>
+              </>
+            )}
+            {(() => {
+              const playerShots = attackShots ?? shots;
+              const playerHitsCount = attackHits ?? (hits?.length ?? 0);
+              const oppShots = opponentShots ?? 0;
+              const oppHits = opponentHits ?? 0;
+              const oppAccuracy =
+                oppShots > 0 ? Math.round((oppHits / oppShots) * 100) : 0;
+              const showScoreboard = playerShots > 0 || oppShots > 0;
+              const playerWonGame = !gaveUp && playerWon === true;
+              const totalPlanes = numPlanes ?? 3;
+              const playerDown = playerPlanesSunk ?? 0;
+              const playerLeft = Math.max(0, totalPlanes - playerDown);
+              const cpuDown = cpuPlanesSunk ?? 0;
+              const cpuLeft = Math.max(0, totalPlanes - cpuDown);
+              return (
+                showScoreboard && (
+                  <View style={styles.scoreboard}>
+                    <View
+                      style={[
+                        styles.scoreboardRow,
+                        styles.scoreboardRowPlayer,
+                        playerWonGame
+                          ? styles.scoreboardRowWinner
+                          : styles.scoreboardRowLoser,
+                      ]}
+                    >
+                      <View style={styles.scoreboardRowHeader}>
+                        <Text style={styles.scoreboardName}>{name}</Text>
+                        <View
+                          style={[
+                            styles.scoreboardBadge,
+                            playerWonGame
+                              ? styles.scoreboardBadgeWin
+                              : styles.scoreboardBadgeLose,
+                          ]}
+                        >
+                          <Text style={styles.scoreboardBadgeText}>
+                            {playerWonGame ? "WIN" : "LOSE"}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.scoreboardStats}>
+                        {formatTime(elapsed)} · {playerShots} shots ·{" "}
+                        {playerHitsCount} hits · {accuracy}%
+                      </Text>
+                      <Text style={styles.scoreboardPlanes}>
+                        {playerDown} plane{playerDown !== 1 ? "s" : ""} down,{" "}
+                        {playerLeft} left
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.scoreboardRow,
+                        styles.scoreboardRowOpponent,
+                        playerWonGame
+                          ? styles.scoreboardRowLoser
+                          : styles.scoreboardRowWinner,
+                      ]}
+                    >
+                      <View style={styles.scoreboardRowHeader}>
+                        <Text style={styles.scoreboardName}>{opponentName}</Text>
+                        <View
+                          style={[
+                            styles.scoreboardBadge,
+                            playerWonGame
+                              ? styles.scoreboardBadgeLose
+                              : styles.scoreboardBadgeWin,
+                          ]}
+                        >
+                          <Text style={styles.scoreboardBadgeText}>
+                            {playerWonGame ? "LOSE" : "WIN"}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.scoreboardStats}>
+                        {oppShots} shots · {oppHits} hits · {oppAccuracy}%
+                      </Text>
+                      <Text style={styles.scoreboardPlanes}>
+                        {cpuDown} plane{cpuDown !== 1 ? "s" : ""} down, {cpuLeft}{" "}
+                        left
+                      </Text>
+                    </View>
+                  </View>
+                )
+              );
+            })()}
+            <SoundPressable
+              style={styles.gameOverMainMenuBtn}
+              onPress={handleMainMenuPress}
+            >
+              <Text style={styles.gameOverMainMenuBtnText}>
+                Return to main menu
+              </Text>
+            </SoundPressable>
+          </View>
+        </View>
+      )}
       {menuOpen && (
         <View style={styles.menuOverlayWrap} pointerEvents="box-none">
           <TouchableWithoutFeedback onPress={closeMenu}>
@@ -385,6 +642,69 @@ export default function GamePhase({
                 </View>
               </View>
               <View style={styles.turnBarMenu}>
+                <View style={styles.soundSection}>
+                  <Text style={styles.soundSectionTitle}>Sound</Text>
+                  <View style={styles.soundRow}>
+                    <Text style={styles.soundLabel}>Effects</Text>
+                    <Slider
+                      style={styles.soundSlider}
+                      minimumValue={0}
+                      maximumValue={1}
+                      value={soundEffectsMuted ? 0 : soundEffectsVolume}
+                      onValueChange={(v) => {
+                        setSoundEffectsMuted(false);
+                        setSoundEffectsVolume(v);
+                      }}
+                      minimumTrackTintColor={UI_WHITE}
+                      maximumTrackTintColor="rgba(255,255,255,0.4)"
+                      thumbTintColor={UI_WHITE}
+                      disabled={soundEffectsMuted}
+                    />
+                    <Pressable
+                      style={[
+                        styles.soundMuteBtn,
+                        soundEffectsMuted && styles.soundMuteBtnActive,
+                      ]}
+                      onPress={() =>
+                        setSoundEffectsMuted(!soundEffectsMuted)
+                      }
+                    >
+                      <Text style={styles.soundMuteBtnText}>
+                        {soundEffectsMuted ? "Unmute" : "Mute"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.soundRow}>
+                    <Text style={styles.soundLabel}>Battle music</Text>
+                    <Slider
+                      style={styles.soundSlider}
+                      minimumValue={0}
+                      maximumValue={1}
+                      value={battleMusicMuted ? 0 : battleMusicVolume}
+                      onValueChange={(v) => {
+                        setBattleMusicMuted(false);
+                        setBattleMusicVolume(v);
+                      }}
+                      minimumTrackTintColor={UI_WHITE}
+                      maximumTrackTintColor="rgba(255,255,255,0.4)"
+                      thumbTintColor={UI_WHITE}
+                      disabled={battleMusicMuted}
+                    />
+                    <Pressable
+                      style={[
+                        styles.soundMuteBtn,
+                        battleMusicMuted && styles.soundMuteBtnActive,
+                      ]}
+                      onPress={() =>
+                        setBattleMusicMuted(!battleMusicMuted)
+                      }
+                    >
+                      <Text style={styles.soundMuteBtnText}>
+                        {battleMusicMuted ? "Unmute" : "Mute"}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
                 {!gameOver && !gaveUp && (
                   <Pressable
                     style={styles.menuItem}

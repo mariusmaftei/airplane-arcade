@@ -55,26 +55,24 @@ function StrokeText({
   );
 }
 
-export default function VersusScreen({ leftName, rightName, mapImage }) {
+export default function VersusScreen({ turnName, leftName, rightName, mapImage, mapVideo }) {
+  const label = turnName ? `${turnName}'s turn` : (leftName && rightName ? `${leftName} vs ${rightName}` : leftName || rightName || "");
   const content = (
     <View style={styles.whiteBox}>
-      <View style={styles.row}>
-        <View style={styles.nameSide}>
-          <StrokeText style={styles.name} numberOfLines={1}>
-            {leftName}
-          </StrokeText>
-        </View>
-        <View style={styles.vsCenter} pointerEvents="none">
-          <StrokeText style={styles.vsText}>VS</StrokeText>
-        </View>
-        <View style={[styles.nameSide, styles.nameSideRight]}>
-          <StrokeText style={[styles.name, styles.nameRight]} numberOfLines={1}>
-            {rightName}
-          </StrokeText>
-        </View>
+      <View style={[styles.row, styles.turnRow]}>
+        <StrokeText style={styles.turnText} numberOfLines={1}>
+          {label}
+        </StrokeText>
       </View>
     </View>
   );
+  if (mapVideo) {
+    return (
+      <View style={[styles.container, styles.containerWithMap]}>
+        {content}
+      </View>
+    );
+  }
   if (mapImage) {
     return (
       <ImageBackground
@@ -134,19 +132,13 @@ const styles = StyleSheet.create({
   nameRight: {
     textAlign: "right",
   },
-  vsCenter: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+  turnRow: {
     justifyContent: "center",
-    alignItems: "center",
   },
-  vsText: {
-    fontSize: 32,
+  turnText: {
+    fontSize: 28,
     fontWeight: "800",
-    letterSpacing: 4,
+    letterSpacing: 2,
   },
   strokeWrap: {
     position: "relative",

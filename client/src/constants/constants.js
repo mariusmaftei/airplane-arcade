@@ -60,6 +60,12 @@ export const MAP_OPTIONS = [
     image: require("../../assets/images/maps/lost-sea-map.png"),
   },
   {
+    id: "lost-sea-vid",
+    label: "Lost sea (video)",
+    video: require("../../assets/videos/lost-sea-map-video.mp4"),
+    image: require("../../assets/images/maps/lost-sea-map.png"),
+  },
+  {
     id: "thunder-storm",
     label: "Thunder storm",
     image: require("../../assets/images/maps/thunder-storm-map.png"),
@@ -67,6 +73,12 @@ export const MAP_OPTIONS = [
   {
     id: "tornado",
     label: "Tornado",
+    image: require("../../assets/images/maps/tornado-map.png"),
+  },
+  {
+    id: "tornado-vid",
+    label: "Tornado (video)",
+    video: require("../../assets/videos/tornado-map-vid.mp4"),
     image: require("../../assets/images/maps/tornado-map.png"),
   },
   {

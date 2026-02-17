@@ -1,4 +1,4 @@
-import { StyleSheet, View, Text, ScrollView } from "react-native";
+import { StyleSheet, View, Text, ScrollView, Pressable } from "react-native";
 import { UI_BODY, UI_INPUT_BORDER, UI_UNSELECTED_BG } from "../constants/constants";
 
 const MINI_CELL = 8;
@@ -11,7 +11,7 @@ function getCellState(hits, misses, revealedCells, row, col) {
   return "empty";
 }
 
-function MiniBoard({ gridSize, hits, misses, revealedCells, label }) {
+function MiniBoard({ gridSize, hits, misses, revealedCells, label, selected, onPress }) {
   const rows = [];
   for (let r = 0; r < gridSize; r++) {
     const cells = [];
@@ -34,11 +34,13 @@ function MiniBoard({ gridSize, hits, misses, revealedCells, label }) {
       </View>,
     );
   }
+  const Wrapper = onPress ? Pressable : View;
+  const wrapperProps = onPress ? { onPress } : {};
   return (
-    <View style={styles.card}>
+    <Wrapper style={[styles.card, selected && styles.cardSelected]} {...wrapperProps}>
       <Text style={styles.cardLabel}>{label}</Text>
       <View style={styles.miniGrid}>{rows}</View>
-    </View>
+    </Wrapper>
   );
 }
 
@@ -50,30 +52,20 @@ export default function OpponentBoardCarousel({
   gameMode = "computer",
   numPlayers = 2,
   carouselLabel,
+  carouselItems = [],
+  selectedTargetId,
+  onSelectTarget,
 }) {
   const isMultiplayer = gameMode === "multiplayer";
-  const items = [];
-  if (isMultiplayer) {
-    for (let i = 2; i <= numPlayers; i++) {
-      items.push({
-        id: `player-${i}`,
-        label: `Player ${i}`,
-        hits,
-        misses,
-        revealedCells,
-      });
-    }
-  } else {
-    items.push({
-      id: "cpu",
-      label: carouselLabel ?? "CPU",
-      hits,
-      misses,
-      revealedCells,
-    });
-  }
+  const items = carouselItems?.length > 0
+    ? carouselItems
+    : isMultiplayer
+      ? [{ id: "opponent", label: carouselLabel ?? "Opponent", hits, misses, revealedCells }]
+      : [{ id: "cpu", label: carouselLabel ?? "CPU", hits, misses, revealedCells }];
 
   if (items.length === 0) return null;
+
+  const canSelect = isMultiplayer && items.length > 1 && onSelectTarget;
 
   return (
     <View style={styles.wrap}>
@@ -86,10 +78,12 @@ export default function OpponentBoardCarousel({
           <MiniBoard
             key={item.id}
             gridSize={gridSize}
-            hits={item.hits}
-            misses={item.misses}
-            revealedCells={item.revealedCells}
-            label={item.label}
+            hits={item.hits ?? []}
+            misses={item.misses ?? []}
+            revealedCells={item.revealedCells ?? []}
+            label={item.label ?? item.name ?? "Opponent"}
+            selected={selectedTargetId === item.id}
+            onPress={canSelect ? () => onSelectTarget(item.id) : undefined}
           />
         ))}
       </ScrollView>
@@ -108,6 +102,10 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: "center",
     marginRight: 12,
+  },
+  cardSelected: {
+    borderColor: UI_BODY,
+    borderWidth: 2,
   },
   cardLabel: {
     fontSize: 12,

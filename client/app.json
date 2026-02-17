@@ -26,7 +26,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": ["expo-audio"],
+    "plugins": [
+      "expo-audio",
+      "expo-video"
+    ],
     "updates": {
       "enabled": false,
       "checkAutomatically": "NEVER",

@@ -3,7 +3,8 @@ import { API_BASE_URL } from "./api";
 const REQUEST_TIMEOUT_MS = 15000;
 
 async function request(path, options = {}) {
-  const url = `${API_BASE_URL}${path}`;
+  const base = options.baseUrl ?? API_BASE_URL;
+  const url = `${base.replace(/\/$/, "")}${path.startsWith("/") ? path : `/${path}`}`;
   console.log(`[API] Requesting: ${url}`);
   const { body, ...rest } = options;
   const controller = new AbortController();
@@ -43,27 +44,96 @@ export async function createGame(
   planes = null,
   options = {},
 ) {
-  const body =
-    planes?.length > 0
+  const body = options.isLanMultiplayer
+    ? {
+        difficulty,
+        planes,
+        isLanMultiplayer: true,
+        ...(options.password != null && { password: options.password }),
+        minPlayers: options.minPlayers ?? 2,
+        maxPlayers: options.maxPlayers ?? 2,
+        ...(options.playerName != null && { playerName: options.playerName }),
+      }
+    : planes?.length > 0
       ? { difficulty, planes }
       : options.vsCpu
         ? { difficulty, vsCpu: true }
         : { difficulty };
-  return request("/game", { method: "POST", body });
+  return request("/game", { method: "POST", body, baseUrl: options.baseUrl });
 }
 
-export async function shoot(gameId, row, col) {
+export async function shoot(gameId, row, col, options = {}) {
+  const body = { row: Number(row), col: Number(col) };
+  if (options.playerSide) body.playerSide = options.playerSide;
+  if (options.targetPlayer) body.targetPlayer = options.targetPlayer;
   return request(`/game/${gameId}/shoot`, {
     method: "POST",
-    body: { row: Number(row), col: Number(col) },
+    body,
+    baseUrl: options.baseUrl,
   });
 }
 
-export async function giveUp(gameId) {
+export async function giveUp(gameId, options = {}) {
+  const body = {};
+  if (options.playerSide) body.playerSide = options.playerSide;
   return request(`/game/${encodeURIComponent(gameId)}/give-up`, {
     method: "POST",
-    body: {},
+    body,
+    baseUrl: options.baseUrl ?? API_BASE_URL,
   });
+}
+
+export async function lanLookup(code, baseUrl) {
+  const b = baseUrl ?? API_BASE_URL;
+  return request(`/lan/lookup?code=${encodeURIComponent(String(code).toUpperCase())}`, {
+    baseUrl: b,
+  });
+}
+
+export async function lanJoining(gameId, baseUrl, options = {}) {
+  const body = {};
+  if (options.playerName) body.playerName = options.playerName;
+  return request(`/game/${encodeURIComponent(gameId)}/lan-joining`, {
+    method: "POST",
+    body,
+    baseUrl: baseUrl ?? API_BASE_URL,
+  });
+}
+
+export async function lanJoin(gameId, planes, baseUrl, options = {}) {
+  const body = { planes };
+  if (options.password != null) body.password = options.password;
+  if (options.playerName) body.playerName = options.playerName;
+  return request(`/game/${encodeURIComponent(gameId)}/lan-join`, {
+    method: "POST",
+    body,
+    baseUrl: baseUrl ?? API_BASE_URL,
+  });
+}
+
+export async function lanHostReady(gameId, baseUrl) {
+  return request(`/game/${encodeURIComponent(gameId)}/lan-host-ready`, {
+    method: "POST",
+    body: {},
+    baseUrl: baseUrl ?? API_BASE_URL,
+  });
+}
+
+export async function lanJoinerReady(gameId, baseUrl, options = {}) {
+  const body = {};
+  if (options.playerSide) body.playerSide = options.playerSide;
+  return request(`/game/${encodeURIComponent(gameId)}/lan-joiner-ready`, {
+    method: "POST",
+    body,
+    baseUrl: baseUrl ?? API_BASE_URL,
+  });
+}
+
+export async function lanStatus(gameId, playerSide, baseUrl) {
+  return request(
+    `/game/${encodeURIComponent(gameId)}/lan-status?playerSide=${encodeURIComponent(playerSide)}`,
+    { baseUrl: baseUrl ?? API_BASE_URL },
+  );
 }
 
 export async function cpuShoot(gameId) {

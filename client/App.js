@@ -2,6 +2,8 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { ApiConfigProvider } from "./src/contexts/ApiConfigContext";
+import { SoundSettingsProvider } from "./src/contexts/SoundSettingsContext";
 import { TapSoundProvider } from "./src/contexts/TapSoundContext";
 import { Component, useEffect } from "react";
 import GameScreen from "./src/screens/GameScreen.js";
@@ -60,12 +62,16 @@ export default function App() {
     <GestureHandlerRootView style={styles.container}>
       <ErrorBoundary>
         <SafeAreaProvider>
+          <ApiConfigProvider>
+          <SoundSettingsProvider>
           <TapSoundProvider>
           <View style={styles.container}>
           <StatusBar style="dark" />
           <GameScreen />
           </View>
           </TapSoundProvider>
+          </SoundSettingsProvider>
+          </ApiConfigProvider>
         </SafeAreaProvider>
       </ErrorBoundary>
     </GestureHandlerRootView>
